@@ -20,5 +20,5 @@ del hard_dependencies, dependency, missing_dependencies
 
 ##### MAIN API #####
 from ptlib.core.api import (
-    Task
+    task
 )

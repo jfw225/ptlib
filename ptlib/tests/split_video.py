@@ -7,10 +7,23 @@ Create two tasks:
 from ptlib import Task
 
 
+class ImageIngest(Task):
+    """ Task for ingesting images from a file path. """
+
+    def __init__(self):
+        super().__init__()
+
+    def submit_job(self, _=None):
+        pass
+
+    def warmup(self, _=None):
+        pass
+
+
 def image_input(output_q, iminp_id, num_inputs, ptp_id):
     ptp = PTProcess(f"image input: {iminp_id}", ptp_id)
 
-    ## Disable GPUs for processes other than predict
+    # Disable GPUs for processes other than predict
     gpus = tf.config.list_physical_devices("GPU")
     tf.config.set_visible_devices([], "GPU")
 
@@ -19,7 +32,8 @@ def image_input(output_q, iminp_id, num_inputs, ptp_id):
     start = iminp_id * frames // num_inputs
     stop = (iminp_id + 1) * frames // num_inputs
     batch_id = start // BATCH_SIZE
-    print(f"image input: {iminp_id} | start: {start} | stop: {stop} | batch_id: {batch_id}")
+    print(
+        f"image input: {iminp_id} | start: {start} | stop: {stop} | batch_id: {batch_id}")
     cap.set(cv2.CAP_PROP_POS_FRAMES, start)
 
     working = True
@@ -52,11 +66,11 @@ def image_input(output_q, iminp_id, num_inputs, ptp_id):
 def video_write(input_q, ptp_id):
     ptp = PTProcess(f"video writer: {ptp_id}", ptp_id)
 
-    ## Disable GPUs for processes other than predict
+    # Disable GPUs for processes other than predict
     gpus = tf.config.list_physical_devices("GPU")
     tf.config.set_visible_devices([], "GPU")
 
-    ## Output Directories
+    # Output Directories
     clip_name = os.path.splitext(os.path.basename(VIDEO_PATH))[0]
     pos_output_dir = os.path.join(OUTPUT_PATH, clip_name + "-pos")
     neg_output_dir = os.path.join(OUTPUT_PATH, clip_name + "-neg")
@@ -65,7 +79,8 @@ def video_write(input_q, ptp_id):
 
     cap = cv2.VideoCapture(VIDEO_PATH)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    resolution = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    resolution = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(
+        cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
 
     ptp.start()
@@ -84,7 +99,8 @@ def video_write(input_q, ptp_id):
 
         output_dir = pos_output_dir if is_pos else neg_output_dir
         path = os.path.join(output_dir, f"{clip_name}-{batch_id}.mp4")
-        video = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, resolution)
+        video = cv2.VideoWriter(
+            path, cv2.VideoWriter_fourcc(*"mp4v"), fps, resolution)
 
         for _, frame, _ in batch:
             video.write(frame)

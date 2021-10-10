@@ -1,1 +1,1 @@
-from ptlib.core.task import Task
+from ptlib.core import task
