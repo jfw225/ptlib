@@ -25,6 +25,21 @@ class Task:
     def __init__(self):
         self.EXIT_FLAG = False
 
+    def create_map(self):
+        """
+        Returns a function that maps input job to output job. The returned 
+        function should evaluate an expression to determine the value of 
+        `self.EXIT_FLAG`. This function should be overloaded.
+        """
+
+        def map_job(self, job):
+            if job is Task.Exit:
+                self.EXIT_FLAG = True
+
+            return job
+
+        return map_job
+
     def submit_job(self, job: Job) -> Job:
         """ 
         Submit `job` to be processed. Within this function, an expression 
