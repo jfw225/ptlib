@@ -7,10 +7,10 @@ import os
 import cv2
 import tensorflow as tf
 
-from ptlib.task import Task
+import ptlib as pt
 
 
-class ImageIngest(Task):
+class ImageIngest(pt.task.Task):
     """ Task for ingesting images from a file path. 
     *** improve IO by making copies of video? *** """
 
@@ -19,13 +19,14 @@ class ImageIngest(Task):
         self.task_number = task_number
         self.num_ingests = num_ingests
         self.batch_size = batch_size
+        self.current_pos = 0
 
         super().__init__()
 
     def create_map(self):
         # disable GPUs for processes other than predict
-        gpus = tf.config.list_physical_devices("GPU")
-        tf.config.set_visible_devices([], "GPU")
+        # gpus = tf.config.list_physical_devices("GPU")
+        # tf.config.set_visible_devices([], "GPU")
 
         # create capture object
         capture = cv2.VideoCapture(self.path)
@@ -33,7 +34,7 @@ class ImageIngest(Task):
         # compute task specific start position, stop position, and batch_id
         num_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         start_pos = self.task_number * num_frames // self.num_ingests
-        stop_pos = (self.task_number + 1) // self.num_ingests
+        stop_pos = (self.task_number + 1) * num_frames // self.num_ingests
         batch_id = start_pos // self.batch_size
         print(
             f"ingest: {self.task_number} | start: {start_pos} | stop: {stop_pos} | batch_id: {batch_id}")
@@ -44,17 +45,21 @@ class ImageIngest(Task):
         # create range to iterate over
         batch_iter = [0 for _ in range(self.batch_size)]
 
-        def job_map(self, _=None):
+        # set the current frame position
+        self.current_pos = start_pos
+
+        def job_map(_=None):
+            print(stop_pos, self.current_pos)
             output_batch = list()
             for _ in batch_iter:
                 ret, frame = capture.read()
 
-                if not ret or start_pos == stop_pos:
+                if not ret or self.current_pos == stop_pos:
                     capture.release()
                     self.EXIT_FLAG = True
 
-                output_batch.append((start_pos, frame))
-                start_pos += 1
+                output_batch.append((self.current_pos, frame))
+                self.current_pos += 1
 
             return batch_id, output_batch
 
@@ -67,7 +72,7 @@ class ImageIngest(Task):
         pass
 
 
-class VideoWrite(Task):
+class VideoWrite(pt.task.Task):
     """ Task for writing videos to file. """
 
     def __init__(self, path, output_path):
@@ -77,8 +82,8 @@ class VideoWrite(Task):
 
     def create_map(self):
         # disable GPUs for processes other than predict
-        gpus = tf.config.list_physical_devices("GPU")
-        tf.config.set_visible_devices([], "GPU")
+        # gpus = tf.config.list_physical_devices("GPU")
+        # tf.config.set_visible_devices([], "GPU")
 
         # create output directories
         clip_name, *_ = os.path.splitext(os.path.basename(self.path))
@@ -92,8 +97,8 @@ class VideoWrite(Task):
             capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         capture.release()
 
-        def job_map(self, job):
-            if job is Task.Exit:
+        def job_map(job):
+            if job is pt.task.Task.Exit:
                 self.EXIT_FLAG = True
 
             batch_id, batch = job
@@ -109,6 +114,20 @@ class VideoWrite(Task):
 
             return None
 
+        return job_map
+
 
 if __name__ == '__main__':
-    video_path = "C:\\Users\\Owner\\projects\\ptlib\\ptlib\\tests\\testvid.mp4"
+    video_path = "test_vid.ts"
+    clip_duration = 30 # 30 seconds
+    batch_size = 30 * clip_duration # fps * duration
+
+    iming = ImageIngest(video_path, 0, 1, batch_size)
+    imwrite = VideoWrite(video_path, "output/")
+
+    iming_map = iming.create_map()
+    imwrite_map = imwrite.create_map()
+
+    while not iming.EXIT_FLAG:
+        batch = iming_map()
+        imwrite_map(batch)
