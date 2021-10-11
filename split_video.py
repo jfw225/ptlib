@@ -14,12 +14,13 @@ class ImageIngest(pt.task.Task):
     """ Task for ingesting images from a file path. 
     *** improve IO by making copies of video? *** """
 
-    def __init__(self, path, task_number, num_ingests, batch_size):
-        self.path = path
-        self.task_number = task_number
+    def __init__(self, video_path, task_num, num_ingests, batch_size):
+        self.video_path = video_path
+        self.task_num = task_num
         self.num_ingests = num_ingests
         self.batch_size = batch_size
         self.current_pos = 0
+        self.batch_id = 0
 
         super().__init__()
 
@@ -29,15 +30,15 @@ class ImageIngest(pt.task.Task):
         # tf.config.set_visible_devices([], "GPU")
 
         # create capture object
-        capture = cv2.VideoCapture(self.path)
+        capture = cv2.VideoCapture(self.video_path)
 
         # compute task specific start position, stop position, and batch_id
         num_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        start_pos = self.task_number * num_frames // self.num_ingests
-        stop_pos = (self.task_number + 1) * num_frames // self.num_ingests
-        batch_id = start_pos // self.batch_size
+        start_pos = self.task_num * num_frames // self.num_ingests
+        stop_pos = (self.task_num + 1) * num_frames // self.num_ingests
+        self.batch_id = start_pos // self.batch_size
         print(
-            f"ingest: {self.task_number} | start: {start_pos} | stop: {stop_pos} | batch_id: {batch_id}")
+            f"ingest: {self.task_num} | start: {start_pos} | stop: {stop_pos} | batch_id: {self.batch_id}")
 
         # set the capture object to the start position
         capture.set(cv2.CAP_PROP_POS_FRAMES, start_pos)
@@ -49,7 +50,6 @@ class ImageIngest(pt.task.Task):
         self.current_pos = start_pos
 
         def job_map(_=None):
-            print(stop_pos, self.current_pos)
             output_batch = list()
             for _ in batch_iter:
                 ret, frame = capture.read()
@@ -61,7 +61,9 @@ class ImageIngest(pt.task.Task):
                 output_batch.append((self.current_pos, frame))
                 self.current_pos += 1
 
-            return batch_id, output_batch
+            self.batch_id += 1
+
+            return self.batch_id - 1, output_batch
 
         return job_map
 
@@ -75,8 +77,8 @@ class ImageIngest(pt.task.Task):
 class VideoWrite(pt.task.Task):
     """ Task for writing videos to file. """
 
-    def __init__(self, path, output_path):
-        self.path = path
+    def __init__(self, video_path, output_path):
+        self.video_path = video_path
         self.output_path = output_path
         super().__init__()
 
@@ -86,12 +88,12 @@ class VideoWrite(pt.task.Task):
         # tf.config.set_visible_devices([], "GPU")
 
         # create output directories
-        clip_name, *_ = os.path.splitext(os.path.basename(self.path))
+        clip_name, *_ = os.path.splitext(os.path.basename(self.video_path))
         output_dir = os.path.join(self.output_path, clip_name + "-clips")
         os.makedirs(output_dir, exist_ok=True)
 
         # determine fps and resolution of original video
-        capture = cv2.VideoCapture(self.path)
+        capture = cv2.VideoCapture(self.video_path)
         fps = int(capture.get(cv2.CAP_PROP_FPS))
         resolution = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(
             capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -118,12 +120,18 @@ class VideoWrite(pt.task.Task):
 
 
 if __name__ == '__main__':
-    video_path = "test_vid.ts"
-    clip_duration = 30 # 30 seconds
-    batch_size = 30 * clip_duration # fps * duration
+    # video_path = "test_vid.ts"
+    video_path = "C:\\Users\\Owner\\Videos\\Battlefield 2042 Open Beta\\testvid.mp4"
+    clip_duration = 30  # 30 seconds
+    batch_size = 30 * clip_duration  # fps * duration
 
-    iming = ImageIngest(video_path, 0, 1, batch_size)
-    imwrite = VideoWrite(video_path, "output/")
+    iming_config = pt.task.Config(
+        video_path=video_path, task_num=0, num_ingests=1, batch_size=batch_size)
+    imwrite_config = pt.task.Config(
+        video_path=video_path, output_path="output/")
+
+    iming = ImageIngest(**iming_config)
+    imwrite = VideoWrite(**imwrite_config)
 
     iming_map = iming.create_map()
     imwrite_map = imwrite.create_map()

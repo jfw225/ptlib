@@ -1,4 +1,10 @@
 
+from ptlib.core.api import (
+    task,
+    Queue,
+    Process
+)  # move to bottom
+
 __docformat__ = "restructuredtext"
 
 # Let users know if they're missing any of our hard dependencies
@@ -19,6 +25,3 @@ if missing_dependencies:
 del hard_dependencies, dependency, missing_dependencies
 
 ##### MAIN API #####
-from ptlib.core.api import (
-    task
-)
