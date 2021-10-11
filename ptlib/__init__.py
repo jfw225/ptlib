@@ -2,7 +2,8 @@
 from ptlib.core.api import (
     task,
     Queue,
-    Process
+    Process,
+    Controller
 )  # move to bottom
 
 __docformat__ = "restructuredtext"

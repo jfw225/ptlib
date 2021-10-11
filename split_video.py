@@ -6,11 +6,12 @@ Create two tasks:
 import os
 import cv2
 import tensorflow as tf
+import multiprocessing as mp
 
 import ptlib as pt
 
 
-class ImageIngest(pt.task.Task):
+class VideoIngest(pt.task.Task):
     """ Task for ingesting images from a file path. 
     *** improve IO by making copies of video? *** """
 
@@ -102,6 +103,7 @@ class VideoWrite(pt.task.Task):
         def job_map(job):
             if job is pt.task.Task.Exit:
                 self.EXIT_FLAG = True
+                return None
 
             batch_id, batch = job
 
@@ -120,22 +122,41 @@ class VideoWrite(pt.task.Task):
 
 
 if __name__ == '__main__':
+    mp.set_start_method("spawn", force=True)
     # video_path = "test_vid.ts"
     video_path = "C:\\Users\\Owner\\Videos\\Battlefield 2042 Open Beta\\testvid.mp4"
-    clip_duration = 30  # 30 seconds
+    clip_duration = 5  # 30 seconds
     batch_size = 30 * clip_duration  # fps * duration
 
-    iming_config = pt.task.Config(
+    viding_config = pt.task.Config(
         video_path=video_path, task_num=0, num_ingests=1, batch_size=batch_size)
-    imwrite_config = pt.task.Config(
+    vidwrite_config = pt.task.Config(
         video_path=video_path, output_path="output/")
 
-    iming = ImageIngest(**iming_config)
-    imwrite = VideoWrite(**imwrite_config)
+    controller = pt.Controller([VideoIngest, VideoWrite], [
+                               viding_config, vidwrite_config])
+    controller.run()
 
-    iming_map = iming.create_map()
-    imwrite_map = imwrite.create_map()
+    # viding_to_vidwrite = mp.Queue()
 
-    while not iming.EXIT_FLAG:
-        batch = iming_map()
-        imwrite_map(batch)
+    # viding_p = pt.Process(VideoIngest, viding_config,
+    #                       pt.Queue(fake=True), viding_to_vidwrite)
+    # vidwrite_p = pt.Process(VideoWrite, vidwrite_config,
+    #                         viding_to_vidwrite, pt.Queue(fake=True))
+
+    # viding_p.start()
+    # vidwrite_p.start()
+
+    # while viding_p.is_alive() or vidwrite_p.is_alive():
+    #     pass
+    # print("done")
+
+    # viding = VideoIngest(**viding_config)
+    # vidwrite = VideoWrite(**vidwrite_config)
+
+    # viding_map = viding.create_map()
+    # vidwrite_map = vidwrite.create_map()
+
+    # while not viding.EXIT_FLAG:
+    #     batch = viding_map()
+    #     vidwrite_map(batch)
