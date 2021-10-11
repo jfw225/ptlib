@@ -7,6 +7,7 @@ import os
 import cv2
 import tensorflow as tf
 import multiprocessing as mp
+import numpy as np
 
 import ptlib as pt
 
@@ -41,30 +42,42 @@ class VideoIngest(pt.task.Task):
         print(
             f"ingest: {self.task_num} | start: {start_pos} | stop: {stop_pos} | batch_id: {self.batch_id}")
 
+        # get shape and dtype
+        _, frame = capture.read()
+        shape, dtype = frame.shape, frame.dtype
+
         # set the capture object to the start position
         capture.set(cv2.CAP_PROP_POS_FRAMES, start_pos)
 
         # create range to iterate over
-        batch_iter = [0 for _ in range(self.batch_size)]
+        batch_iter = [i for i in range(self.batch_size)]
 
         # set the current frame position
         self.current_pos = start_pos
 
+        # set zero array and output array
+        self.output_arr = np.zeros((self.batch_size, *shape), dtype=dtype)
+
         def job_map(_=None):
-            output_batch = list()
-            for _ in batch_iter:
+            # output_batch = list()
+            self.output_arr.fill(0)
+            for i in batch_iter:
                 ret, frame = capture.read()
 
                 if not ret or self.current_pos == stop_pos:
                     capture.release()
                     self.EXIT_FLAG = True
+                    break
 
-                output_batch.append((self.current_pos, frame))
+                # output_batch.append((self.current_pos, frame))
+                # output_batch.append(frame)
+                self.output_arr[i] = frame
                 self.current_pos += 1
 
             self.batch_id += 1
 
-            return self.batch_id - 1, output_batch
+            # return output_batch
+            return self.output_arr
 
         return job_map
 
@@ -81,6 +94,7 @@ class VideoWrite(pt.task.Task):
     def __init__(self, video_path, output_path):
         self.video_path = video_path
         self.output_path = output_path
+        self.batch_id = 0
         super().__init__()
 
     def create_map(self):
@@ -105,16 +119,17 @@ class VideoWrite(pt.task.Task):
                 self.EXIT_FLAG = True
                 return None
 
-            batch_id, batch = job
+            batch = job
 
-            path = os.path.join(output_dir, f"{clip_name}-{batch_id}.mp4")
+            path = os.path.join(output_dir, f"{clip_name}-{self.batch_id}.mp4")
             video = cv2.VideoWriter(
                 path, cv2.VideoWriter_fourcc(*"mp4v"), fps, resolution)
 
-            for _, frame in batch:
+            for frame in batch:
                 video.write(frame)
 
             video.release()
+            self.batch_id += 1
 
             return None
 
@@ -136,27 +151,3 @@ if __name__ == '__main__':
     controller = pt.Controller([VideoIngest, VideoWrite], [
                                viding_config, vidwrite_config])
     controller.run()
-
-    # viding_to_vidwrite = mp.Queue()
-
-    # viding_p = pt.Process(VideoIngest, viding_config,
-    #                       pt.Queue(fake=True), viding_to_vidwrite)
-    # vidwrite_p = pt.Process(VideoWrite, vidwrite_config,
-    #                         viding_to_vidwrite, pt.Queue(fake=True))
-
-    # viding_p.start()
-    # vidwrite_p.start()
-
-    # while viding_p.is_alive() or vidwrite_p.is_alive():
-    #     pass
-    # print("done")
-
-    # viding = VideoIngest(**viding_config)
-    # vidwrite = VideoWrite(**vidwrite_config)
-
-    # viding_map = viding.create_map()
-    # vidwrite_map = vidwrite.create_map()
-
-    # while not viding.EXIT_FLAG:
-    #     batch = viding_map()
-    #     vidwrite_map(batch)

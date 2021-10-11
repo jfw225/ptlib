@@ -23,10 +23,18 @@ class Process(mpProcess):
         task = self.Task(**self.task_config)
         job_map = task.create_map()
 
+        input_q._link_mem()
+        output_q._link_mem()
+
         while not task.EXIT_FLAG:
             input_job = self.input_q.get()
-            output_job = job_map(input_job)
-            self.output_q.put(output_job)
+            if input_job is False:
+                continue
 
-        self.output_q.put(Task.Exit)
+            output_job = job_map(input_job)
+
+            while self.output_q.put(output_job) is not True:
+                pass
+
+        # self.output_q.put(Task.Exit)
         print("task done")
