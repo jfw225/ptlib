@@ -1,4 +1,4 @@
-from ptlib.core import task
+from ptlib.core.task import EmptyTask, Task
 from ptlib.core.queue import Queue
-from ptlib.core.process import Process
+from ptlib.core.worker import Worker
 from ptlib.core.controller import Controller

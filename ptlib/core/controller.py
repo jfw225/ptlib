@@ -1,49 +1,62 @@
+from os import stat
 import numpy as np
 import multiprocessing as mp
 
-from ptlib.core.process import Process
+from ptlib.core.task import EmptyTask
 from ptlib.core.queue import Queue, PTMem
+from ptlib.core.task import Task
 
 
 class Controller:
     """ The controller. *** COME BACK *** """
 
-    def __init__(self, Tasks, task_configs, queue_max_size=5):
-        self.processes = list()
+    def __init__(self, pipeline, queue_max_size=5):
+        # set default input job and fake input queue
+        input_job, input_q, = None, Queue(fake=True)
 
-        input_q = Queue(fake=True)
-        input_job = None
-        while len(Tasks) > 1:
-            Task, task_config = Tasks.pop(0), task_configs.pop(0)
+        # must store queues so they aren't garbage collected
+        self._queues = list()
+
+        for task in pipeline.iter_tasks():
+            # skip last task
+            if task.next is EmptyTask:
+                break
 
             # try to infer output job structure
-            input_job, (shape, dtype) = self.infer_structure(
-                Task, task_config, input_job)
+            input_job, (shape, dtype) = task.infer_structure(input_job)
 
-            # output_q = mp.Queue()
+            # create and store output queue
             output_q = PTMem(capacity=queue_max_size, shape=shape, dtype=dtype)
-            self.processes.append(
-                Process(Task, task_config, input_q, output_q))
+            self._queues.append(output_q)
+
+            # create workers and assign them to task
+            task.create_workers(input_q, output_q)
+
+            # set input queue of task.next to output queue of task
             input_q = output_q
 
-        Task, task_config = Tasks.pop(), task_configs.pop()
-        self.processes.append(
-            Process(Task, task_config, input_q, Queue(fake=True)))
+            # update task
+            task = task.next
+
+        # create workers and assign them to the final task
+        task.create_workers(input_q, Queue(fake=True))
+
+        self.pipeline = pipeline
+        self.queue_max_size = queue_max_size
 
     def run(self):
-        for p in self.processes:
-            p.start()
+        # for process start method to spawn
+        mp.set_start_method("spawn", force=True)
 
-        while any([p.is_alive() for p in self.processes]):
-            pass
+        # start all worker processes
+        for task in self.pipeline.iter_tasks():
+            task._start_workers()
 
-        print("done")
+        # wait for the workers of each task to sequentially finish
+        for task in self.pipeline.iter_tasks():
+            while task._workers_running():
+                pass
 
-    @staticmethod
-    def infer_structure(Task, task_config, input_job):
-        task = Task(**task_config)
-        job_map = task.create_map()
-        output_job = np.array(job_map(input_job))
-        print(output_job.shape, output_job.dtype)
+            print(f"Task Finished: {task}")
 
-        return output_job, (output_job.shape, output_job.dtype)
+        print("controller done")
