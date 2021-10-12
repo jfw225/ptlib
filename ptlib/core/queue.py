@@ -2,8 +2,8 @@
 import numpy as np
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import Lock
-from multiprocessing.queues import Queue as mpQueue
-from multiprocessing import get_context
+
+from typing import Tuple
 
 
 class Queue:
@@ -33,7 +33,7 @@ class PTMem:
 
     def __init__(self,
                  capacity: int = 1,
-                 shape: tuple[int] = None,
+                 shape: Tuple[int] = None,
                  dtype: np.dtype = None,
                  example: np.ndarray = None):
         """ 

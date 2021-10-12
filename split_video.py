@@ -5,7 +5,7 @@ Create two tasks:
 """
 import os
 import cv2
-import tensorflow as tf
+# import tensorflow as tf
 import multiprocessing as mp
 import numpy as np
 
@@ -138,8 +138,8 @@ class VideoWrite(pt.task.Task):
 
 if __name__ == '__main__':
     mp.set_start_method("spawn", force=True)
-    # video_path = "test_vid.ts"
-    video_path = "C:\\Users\\Owner\\Videos\\Battlefield 2042 Open Beta\\testvid.mp4"
+    video_path = "../test_vid.ts"
+    # video_path = "C:\\Users\\Owner\\Videos\\Battlefield 2042 Open Beta\\testvid.mp4"
     clip_duration = 5  # 30 seconds
     batch_size = 30 * clip_duration  # fps * duration
 
