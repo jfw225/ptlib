@@ -31,6 +31,21 @@ class JobSpec(list):
         self.shape = shape
         self.dtype = dtype
 
+    @classmethod
+    def from_output_job(cls, output_job: "Job" or np.ndarray):
+        """ 
+        Alternative constructor for determing job specifications from an 
+        instance of `ptlib.core.job.Job`. 
+        """
+
+        job_spec_list = [cls(example=job) for job in output_job]
+
+        job_specs = job_spec_list.pop(0)
+        for next_job_spec in job_spec_list:
+            job_specs += next_job_spec
+
+        return job_specs
+
     def __add__(self, x: "JobSpec") -> "JobSpec":
         """
         List is inherited to allow for JobSpec objects to be combined using the

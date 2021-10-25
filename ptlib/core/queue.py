@@ -21,13 +21,7 @@ class BaseQueue:
         """ Flag for closed queue. """
 
     def __init__(self, *args, **kwargs):
-        pass
-
-        # super().__init__(maxsize=maxsize, ctx=get_context())
-
-        # if fake:
-        #     self.get = lambda: None
-        #     self.put = lambda x: None
+        self.job = None
 
     def get(self):
         return []
@@ -38,7 +32,7 @@ class BaseQueue:
     def close(self):
         pass
 
-    def _link_mem(self):
+    def _link_mem(self, create_local=False):
         pass
 
 
@@ -46,9 +40,16 @@ class FIFOQueue(BaseQueue):
     """ Object to faciliate memory management across parallel processes. 
 
     Attributes: (** update with jobs and replace arr with buffer or buf)
-        arr_dat -- (capacity x shape)-darray 
-            Buffer for asynchronous data transfer.
-        arr_sel -- (3 x 1)-darray
+        _job_buffer -- ptlib.core.job.Job or (capacity x shape)-darray 
+            Array of arrays linked to the shared memory buffer for asynchronous 
+            data transfer.
+        _local_job_buffer -- ptlib.core.job.Job or shape-darray
+            Local copy of a single job used to load a temporary copy of an 
+            _job_buffer[i]. This is only created if `_link_mem` is called with 
+            kwarg `create_local=True`. Very important that this is created if 
+            queue is acting as an input or else data in `_job_buffer` might get 
+            overwritten by an upstream task before it is used.
+        _arr_sel -- (3 x 1)-darray
             Buffer with following elements:
                 =+= `arr_sel[0]=i` indicates that `put()` will store data in 
                     `arr_dat[i]` 
@@ -56,7 +57,7 @@ class FIFOQueue(BaseQueue):
                     from `arr_dat[j]`.
                 =+= `arr_sel[0]=k` where `k==0` indicates queue is open and 
                     `k==1` indicates queue is closed.
-        arr_chk -- (capacity x 1)-darray
+        _arr_chk -- (capacity x 1)-darray
             Buffer where each `arr_chk[i]` is 0 if `arr_dat[i]` is full or 1 if 
             `arr_dat[i]` is empty.
         """
@@ -79,7 +80,7 @@ class FIFOQueue(BaseQueue):
 
         # iterate over job specifications and allocate memory
         self._job_shms = list()
-        self._job_buffers = self._jobs = None
+        self._job_buffer = self._local_job_buffer = None
         for job_spec in job_specs:
             # cast to np.ulonglong or else `data_nbytes` will be incorrect
             job_spec.shape = np.array(
@@ -90,17 +91,7 @@ class FIFOQueue(BaseQueue):
 
             self._job_shms.append(SharedMemory(create=True, size=data_nbytes))
 
-        # shape = example.shape if isinstance(example, np.ndarray) else shape
-        # self.shape = np.array((capacity, *job_spec.shape), dtype=np.ulonglong)
-        # self.dtype = job_spec.dtype
-        # self.dtype = example.dtype if isinstance(
-        #     example, np.ndarray) else dtype
-
-        # calculate number of bytes for data
-        # data_nbytes = int(np.nbytes[self.dtype] * np.product(self.shape))
-
         # create shared memory objects
-        # self.shm_dat = SharedMemory(create=True, size=data_nbytes)
         self._shm_sel = SharedMemory(create=True, size=3)
         self._shm_chk = SharedMemory(create=True, size=capacity)
 
@@ -109,7 +100,6 @@ class FIFOQueue(BaseQueue):
         np.ndarray(capacity, dtype=np.int8, buffer=self._shm_chk.buf).fill(0)
 
         # declare arrays
-        # self.arr_dat = np.ndarray(0)
         self._arr_sel = np.ndarray(0)
         self._arr_chk = np.ndarray(0)
 
@@ -122,10 +112,21 @@ class FIFOQueue(BaseQueue):
         # flag to check if arrays have been linked in current context
         self._is_linked = False
 
+    @property
+    def job(self):
+        """
+        Calling this creates an internal job buffer and stores it as 
+        `self._local_job_buffer`. 
+        """
+
+        return self._local_job_buffer
+
     def get(self):
         """
-        If `self.arr_dat[current index]` is empty, returns `BaseQueue.empty`. 
-        Otherwise, loads the data into `self.buffer` and returns it. 
+        Attemps to retreive data from shared memory. If the selected index is 
+        empty, this returns `BaseQueue.empty`. If the queue is closed, then 
+        `BaseQueue.Closed` is returned. Otherwise, this loads data into 
+        `self._local_job_buffer` and returns True. 
         """
 
         # acquire selection lock
@@ -147,7 +148,7 @@ class FIFOQueue(BaseQueue):
 
         # get payload (must copy because buffer might change in other process)
         for i in self._iter:
-            self._jobs[i][:] = self._job_buffers[i][sel_index][:]
+            self._local_job_buffer[i][:] = self._job_buffer[i][sel_index][:]
 
         # self.input_buffer[:] = self.arr_dat[sel_index][:]
 
@@ -157,13 +158,16 @@ class FIFOQueue(BaseQueue):
         # set check[get] to low
         self._arr_chk[sel_index] = 0
 
-        return self._jobs
+        return True
 
-    def put(self, buffers):
+    def put(self, buffer):
         """
-        If `self.arr_dat[current index]` is full, returns `BaseQueue.Full`.
-        Otherwise, loads the data into `buffer`. 
+        Attempts to load `buffer` into shared memory. If the selected index is 
+        full, then this returns `BaseQueue.Full`. If the queue is closed, then 
+        `BaseQueue.Closed` is returned. Otherwise, this loads data into 
+        `self._job_buffer` and returns True. 
         """
+
         # acquire selection lock
         self._lock_sel.acquire()
 
@@ -184,7 +188,7 @@ class FIFOQueue(BaseQueue):
 
         # set payload
         for i in self._iter:
-            self._job_buffers[i][sel_index][:] = buffers[i][:]
+            self._job_buffer[i][sel_index][:] = buffer[i][:]
 
         # self.arr_dat[sel_index][:] = buffer[:]
 
@@ -209,25 +213,28 @@ class FIFOQueue(BaseQueue):
         # set `self._arr_sel[2]` to HIGH
         self._arr_sel[2] = 1
 
-    def _link_mem(self):
+    def _link_mem(self, create_local=False):
         """ 
         Links interal arrays to their buffers in memory. Must be called
-        after new process is spawned. Also creates local buffer to fill during
-        `get` calls and sets `self._is_linked` to HIGH. 
+        after new process is spawned. If `create_local` is True, then this 
+        createsand returns a local buffer that is filled during `get` calls. 
+        Regardless, this process sets `self._is_linked` to HIGH. 
         """
 
         # allocate new job buffers and link them to their buffers in memory
-        self._job_buffers = Job(self._job_specs, buffers=self._job_shms)
+        self._job_buffer = Job(self._job_specs, buffers=self._job_shms)
 
         # drop `self.capacity` from each job spec and create job arrays
-        self._jobs = Job([JobSpec(job_spec.shape[1:], job_spec.dtype)
-                          for job_spec in self._job_specs])
+        if create_local:
+            self._local_job_buffer = Job(
+                [JobSpec(job_spec.shape[1:], job_spec.dtype)
+                 for job_spec in self._job_specs])
 
         # for job_spec, shm_dat in zip(self._job_specs, self._job_shms):
-        #     self._job_buffers.append(np.ndarray(job_spec.shape,
+        #     self._job_buffer.append(np.ndarray(job_spec.shape,
         #                                         dtype=job_spec.dtype,
         #                                         buffer=shm_dat.buf))
-        #     self._jobs.append(np.ndarray(
+        #     self._local_job_buffer.append(np.ndarray(
         #         job_spec.shape[1:], job_spec.dtype))
 
         # link arrays to buffers in memory
@@ -241,6 +248,8 @@ class FIFOQueue(BaseQueue):
 
         # set linked flag to HIGH
         self._is_linked = True
+
+        return self._local_job_buffer
 
 
 def Queue(job_specs: JobSpec = None,

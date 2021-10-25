@@ -1,7 +1,7 @@
 from typing import Iterable
 import numpy as np
 
-from ptlib.core.job import JobSpec
+from ptlib.core.job import JobSpec, Job
 from ptlib.errors import WorkerCreationError, WorkerStartError
 from ptlib.core.queue import Queue
 from ptlib.core.worker import Worker
@@ -13,8 +13,8 @@ class EmptyTask:
 
 
 class Task:
-    """ 
-    Template class for making new Task objects. 
+    """
+    Template class for making new Task objects.
 
     Parameters:
         config -- ptlib.task.config
@@ -44,7 +44,7 @@ class Task:
     @property
     def name(self):
         """
-        Formats the name of the task instance by looking at the class 
+        Formats the name of the task instance by looking at the class
         definition.
         """
 
@@ -52,27 +52,37 @@ class Task:
 
     def create_map(self, worker: Worker):
         """
-        Returns a function that maps input job to output job for a specific 
-        worker. The returned function `map_job` should evaluate an expression 
-        to determine the value of `worker.EXIT_FLAG`. `create_map` should be 
-        overloaded.
+        Returns a function that maps input job to output job for a specific
+        worker.
+
+        The returned function `map_job` should evaluate an expression
+        to determine the value of `worker.EXIT_FLAG`. It should also do
+        something with each job in `input_job: ptlib.core.job.Job` and return
+        an output job.
+
+        The default `create_map` should be overloaded.
         """
 
-        # do_something = lambda
-        def map_job(input_job_buffer: Iterable[Job[JobSpec]],
-                    output_job_buffer: Iterable[Job[JobSpec]]):
-            if input_job_buffer is Task.Exit:
+        def map_job(input_job: Job["Job_1_in", ..., "Job_n_in"]
+                    ) -> (Job or np.ndarray)["Job_1_out", ..., "Job_m_out"]:
+            # example exit
+            if input_job is Task.Exit:
                 worker.EXIT_FLAG = True
 
-            return input_job_buffer
+            # example modification
+            output_job = input_job.copy()
+            for i in range(len((input_job))):
+                output_job[i][:] = input_job[i][:]
+
+            return output_job
 
         return map_job
 
     def create_workers(self, input_q, output_q, meta_q):
         """
-        Returns a list of pt.Worker objects and stores input queue. Overloading 
-        this function allows the developer to modify the controller's 
-        instructions for worker creation. 
+        Returns a list of pt.Worker objects and stores input queue. Overloading
+        this function allows the developer to modify the controller's
+        instructions for worker creation.
         """
 
         if len(self.workers) > 0:
@@ -85,24 +95,24 @@ class Task:
                 Worker(self, worker_id, input_q, output_q, meta_q))
 
     def infer_structure(self, input_job):
-        """ 
-        Tries to infer the structure (shape, dtype) of task's output job an 
-        example input job. This is done by creating (and later deleting) a 
+        """
+        Tries to infer the structure (shape, dtype) of task's output job an
+        example input job. This is done by creating (and later deleting) a
         temporary worker to analyze the output of `map_job(input_job)`.
         """
 
         worker = Worker(self, 0, Queue(), Queue(), Queue())
-        job_map = self.create_map(worker)
-        output_job = job_map(input_job)
+        output_job = self.create_map(worker)(input_job)
+        job_specs = JobSpec.from_output_job(output_job)
 
-        return output_job, JobSpec(example=output_job)
+        return output_job, job_specs
 
     def __rshift__(self, other):
-        """ 
+        """
         Allows tasks to be connected into a pipeline using the `>>` operator.
-        This operation finds the last task in linked list of tasks by iterating 
-        over the `task.next` attribute. Assigns `other.id` to the last 
-        task ID + 1. 
+        This operation finds the last task in linked list of tasks by iterating
+        over the `task.next` attribute. Assigns `other.id` to the last
+        task ID + 1.
         """
 
         if isinstance(other, Task):
@@ -116,17 +126,17 @@ class Task:
         return self
 
     def cleanup(self):
-        """ 
-        Routine for task cleanup after termination. This function should be 
-        overloaded if needed. 
+        """
+        Routine for task cleanup after termination. This function should be
+        overloaded if needed.
         """
 
         pass
 
     def iter_tasks(self):
         """
-        Generator that iterates over linked list structure of tasks using the 
-        `task.next` attribute. 
+        Generator that iterates over linked list structure of tasks using the
+        `task.next` attribute.
         """
 
         task = self
@@ -136,16 +146,16 @@ class Task:
 
     def _set_input_queue(self, input_q):
         """
-        Sets `self.input_q=input_q`. This is important because it guarantees 
-        that each queue is not accidently garbage collected before it's used. 
+        Sets `self.input_q=input_q`. This is important because it guarantees
+        that each queue is not accidently garbage collected before it's used.
         Also needed in 'self._kill_workers`.
         """
 
         self.input_q = input_q
 
     def _start_workers(self):
-        """ 
-        Starts each of the worker processes. This should not be overloaded. 
+        """
+        Starts each of the worker processes. This should not be overloaded.
         """
 
         if len(self.workers) == 0:
@@ -157,14 +167,14 @@ class Task:
 
     def _workers_running(self):
         """
-        Returns True if workers are still running, False if otherwise. 
+        Returns True if workers are still running, False if otherwise.
         """
 
         return any([worker.is_alive() for worker in self.workers])
 
     def _kill_workers(self):
         """
-        Signals workers to exit by closing their input queue. 
+        Signals workers to exit by closing their input queue.
         """
 
         self.input_q.close()

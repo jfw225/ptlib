@@ -77,10 +77,10 @@ class Controller:
                 break
 
             # try to infer output job structure
-            input_job, job_spec = task.infer_structure(input_job)
+            input_job, job_specs = task.infer_structure(input_job)
 
             # create and store output queue
-            output_q = Queue(job_spec, capacity=self.queue_max_size)
+            output_q = Queue(job_specs, capacity=self.queue_max_size)
 
             # set input queue of task (see method documentation for reason)
             task._set_input_queue(input_q)

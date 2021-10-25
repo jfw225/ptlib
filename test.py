@@ -52,3 +52,6 @@ if __name__ == '__main__':
     inp = np.ndarray((1, 2), dtype=object)
     print(inp)
     inp[0]
+
+    print(k + k)
+    print(sum([k, k]))

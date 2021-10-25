@@ -45,8 +45,7 @@ class VideoIngest(pt.Task):
         # set zero array and output array
         worker.output_arr = np.zeros((self.BATCH_SIZE, *shape), dtype=dtype)
 
-        def job_map(_=None):
-            # output_batch = list()
+        def job_map(input_job):
             worker.output_arr.fill(0)
             for i in batch_iter:
                 ret, frame = capture.read()
@@ -56,15 +55,13 @@ class VideoIngest(pt.Task):
                     worker.EXIT_FLAG = True
                     break
 
-                # output_batch.append((self.current_pos, frame))
-                # output_batch.append(frame)
                 worker.output_arr[i] = frame
                 worker.current_pos += 1
 
             worker.batch_id += 1
 
             # return output_batch
-            return worker.output_arr
+            return [worker.output_arr]
 
         return job_map
 
@@ -95,12 +92,12 @@ class VideoWrite(pt.Task):
         # create batch id counter
         worker.batch_id = 0
 
-        def job_map(job):
-            if job is pt.Task.Exit:
+        def job_map(input_job):
+            if input_job is pt.Task.Exit:
                 self.EXIT_FLAG = True
                 return None
 
-            batch = job
+            batch = input_job[0]
 
             path = os.path.join(
                 output_dir, f"{clip_name}-{worker.batch_id}.mp4")
@@ -113,7 +110,7 @@ class VideoWrite(pt.Task):
             video.release()
             worker.batch_id += 1
 
-            return None
+            return [None]
 
         return job_map
 

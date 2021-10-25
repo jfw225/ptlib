@@ -44,20 +44,22 @@ class Worker(BaseManager):
         job_map = task.create_map(self)
 
         # link queues to memory
-        input_q._link_mem()
+        input_job = input_q._link_mem(create_local=True)
         output_q._link_mem()
         meta_q._link_mem()
 
+        # metadata buffer
         metadata_buffer = np.array([time_ns(), time_ns()])
+
+        input_status = BaseQueue.Empty
         while not self.EXIT_FLAG:
-            input_job = input_q.get()
-            if input_job is BaseQueue.Empty:
+            if (input_status := input_q.get()) is BaseQueue.Empty:
                 continue
-            elif input_job is BaseQueue.Closed:
+            elif input_status is BaseQueue.Closed:
                 break
 
             metadata_buffer[0] = time_ns()
-            output_job = [job_map(*input_job)]
+            output_job = job_map(input_job)
             metadata_buffer[1] = time_ns()
             print("meta q", meta_q.put([metadata_buffer]))
 

@@ -17,7 +17,7 @@
 - have multiple job specs
 - use the input buffers for output too since the output queue also makes their own buffers
 
-- have job map functions take in the output buffer
+- have job map functions take in the output buffer (figure out how to do this and infer output structure)
 - have queue get return True instead of list
 - create jobs class to replace input buffers
 - fix task job map documentation
