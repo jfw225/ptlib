@@ -3,16 +3,25 @@ import numpy as np
 import multiprocessing as mp
 
 from ptlib.core.task import EmptyTask
-from ptlib.core.queue import Queue, PTMem
+from ptlib.core.queue import Queue
 from ptlib.core.task import Task
 
+from typing import Tuple
 
-class Controller:
+
+class Controller(mp.managers.BaseManager):
     """ The controller. *** COME BACK *** """
 
-    def __init__(self, pipeline, queue_max_size=5):
+    def __init__(self,
+                 pipeline: Task,
+                 queue_max_size: int = 5,
+                 internal_server_address: Tuple[str, int] = ("", 64529)):
+
+        # initialize base manager
+        super().__init__(address=internal_server_address)
+
         # set default input job and fake input queue
-        input_job, input_q, = None, Queue(fake=True)
+        input_job, input_q, = None, Queue()
 
         # must store queues so they aren't garbage collected
         self._queues = list()
@@ -26,7 +35,7 @@ class Controller:
             input_job, (shape, dtype) = task.infer_structure(input_job)
 
             # create and store output queue
-            output_q = PTMem(capacity=queue_max_size, shape=shape, dtype=dtype)
+            output_q = Queue(capacity=queue_max_size, shape=shape, dtype=dtype)
             self._queues.append(output_q)
 
             # create workers and assign them to task
@@ -39,7 +48,7 @@ class Controller:
             task = task.next
 
         # create workers and assign them to the final task
-        task.create_workers(input_q, Queue(fake=True))
+        task.create_workers(input_q, Queue())
 
         self.pipeline = pipeline
         self.queue_max_size = queue_max_size
@@ -54,6 +63,7 @@ class Controller:
 
         # wait for the workers of each task to sequentially finish
         for task in self.pipeline.iter_tasks():
+            task._kill_workers()
             while task._workers_running():
                 pass
 

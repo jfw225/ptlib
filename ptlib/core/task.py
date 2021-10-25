@@ -35,6 +35,7 @@ class Task:
         self.num_workers = num_workers
         self.workers = list()
         self.next = EmptyTask
+        self.input_q = Queue()
 
     def create_map(self, worker: Worker):
         """
@@ -54,9 +55,9 @@ class Task:
 
     def create_workers(self, input_q, output_q):
         """
-        Returns a list of pt.Worker objects. Overloading this function allows 
-        the developer to modify the controller's instructions for worker 
-        creation. 
+        Returns a list of pt.Worker objects and stores input queue. Overloading 
+        this function allows the developer to modify the controller's 
+        instructions for worker creation. 
         """
 
         if len(self.workers) > 0:
@@ -66,6 +67,8 @@ class Task:
         for worker_id in range(self.num_workers):
             self.workers.append(Worker(self, worker_id, input_q, output_q))
 
+        self.input_q = input_q
+
     def infer_structure(self, input_job):
         """ 
         Tries to infer the structure (shape, dtype) of task's output job an 
@@ -73,7 +76,7 @@ class Task:
         temporary worker to analyze the output of `map_job(input_job)`.
         """
 
-        worker = Worker(self, 0, Queue(fake=True), Queue(fake=True))
+        worker = Worker(self, 0, Queue(), Queue())
         job_map = self.create_map(worker)
         output_job = np.array(job_map(input_job))
 
@@ -125,3 +128,10 @@ class Task:
         """
 
         return any([worker.is_alive() for worker in self.workers])
+
+    def _kill_workers(self):
+        """
+        Signals workers to exit by closing their input queue. 
+        """
+
+        self.input_q.close()

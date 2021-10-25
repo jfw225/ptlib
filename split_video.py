@@ -123,5 +123,5 @@ if __name__ == '__main__':
     pipeline = VideoIngest() >> VideoWrite()
 
     # create and run controller
-    controller = pt.Controller(pipeline)
+    controller = pt.Controller(pipeline, 5)
     controller.run()

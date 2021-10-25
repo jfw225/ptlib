@@ -1,5 +1,7 @@
 from multiprocessing import Process
 
+from ptlib.core.queue import BaseQueue
+
 
 class Worker(Process):
     """ Worker class. *** come back*** """
@@ -26,12 +28,14 @@ class Worker(Process):
 
         while not self.EXIT_FLAG:
             input_job = input_q.get()
-            if input_job is False:
+            if input_job is BaseQueue.Empty:
                 continue
+            elif input_job is BaseQueue.Closed:
+                break
 
             output_job = job_map(input_job)
 
-            while output_q.put(output_job) is not True:
+            while output_q.put(output_job) is BaseQueue.Full:
                 pass
 
         print(f"Worker Done -- Task: {task} | ID: {self.id}")

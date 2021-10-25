@@ -6,5 +6,6 @@
 - enumerate job structure
 - figure out multi-job outputs
 - enumerate empty job
-- create Queue() function that returns EmptyQueue or PTMem
-- Timer
+- add in timing diagram
+- overload manager class of multiprocessing for controller such that 
+  more stuff is done in Run Loop
