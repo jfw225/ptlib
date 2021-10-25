@@ -1,6 +1,7 @@
+from typing import Iterable
 import numpy as np
 
-from ptlib._typing import Job
+from ptlib.core.job import JobSpec
 from ptlib.errors import WorkerCreationError, WorkerStartError
 from ptlib.core.queue import Queue
 from ptlib.core.worker import Worker
@@ -57,11 +58,13 @@ class Task:
         overloaded.
         """
 
-        def map_job(job):
-            if job is Task.Exit:
+        # do_something = lambda
+        def map_job(input_job_buffer: Iterable[Job[JobSpec]],
+                    output_job_buffer: Iterable[Job[JobSpec]]):
+            if input_job_buffer is Task.Exit:
                 worker.EXIT_FLAG = True
 
-            return job
+            return input_job_buffer
 
         return map_job
 
@@ -90,9 +93,9 @@ class Task:
 
         worker = Worker(self, 0, Queue(), Queue(), Queue())
         job_map = self.create_map(worker)
-        output_job = np.array(job_map(input_job))
+        output_job = job_map(input_job)
 
-        return output_job, (output_job.shape, output_job.dtype)
+        return output_job, JobSpec(example=output_job)
 
     def __rshift__(self, other):
         """ 

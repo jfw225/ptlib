@@ -2,9 +2,9 @@
 from ptlib import errors
 
 from ptlib.core.api import (
-    EmptyTask,
-    Task,
+    JobSpec, Job,
     Queue,
+    EmptyTask, Task,
     Worker,
     Controller
 )  # move to bottom

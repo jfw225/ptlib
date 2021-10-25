@@ -57,9 +57,9 @@ class Worker(BaseManager):
                 break
 
             metadata_buffer[0] = time_ns()
-            output_job = job_map(input_job)
+            output_job = [job_map(*input_job)]
             metadata_buffer[1] = time_ns()
-            print("meta q", meta_q.put(metadata_buffer))
+            print("meta q", meta_q.put([metadata_buffer]))
 
             while output_q.put(output_job) is BaseQueue.Full:
                 pass

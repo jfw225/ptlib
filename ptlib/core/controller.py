@@ -2,6 +2,7 @@ import numpy as np
 import multiprocessing as mp
 
 from time import time_ns
+from ptlib.core.job import JobSpec
 
 from ptlib.core.metadata import MetadataManager
 from ptlib.core.task import Task, EmptyTask
@@ -29,7 +30,7 @@ class Controller:
 
         # queue for communicating metadata (replace 30 with something to do with total workers)
         self.meta_q = Queue(
-            capacity=30, example=np.array([time_ns(), time_ns()]))
+            JobSpec(example=[time_ns(), time_ns()]), capacity=30)
 
         # set up tasks
         self._set_up_tasks()
@@ -76,11 +77,10 @@ class Controller:
                 break
 
             # try to infer output job structure
-            input_job, (shape, dtype) = task.infer_structure(input_job)
+            input_job, job_spec = task.infer_structure(input_job)
 
             # create and store output queue
-            output_q = Queue(capacity=self.queue_max_size,
-                             shape=shape, dtype=dtype)
+            output_q = Queue(job_spec, capacity=self.queue_max_size)
 
             # set input queue of task (see method documentation for reason)
             task._set_input_queue(input_q)
