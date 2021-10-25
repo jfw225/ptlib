@@ -9,3 +9,7 @@
 - add in timing diagram
 - overload manager class of multiprocessing for controller such that 
   more stuff is done in Run Loop
+
+- verify that task.id is set properly
+- try sharing objects with proxies or figure out different way to communicate metadata
+- figure out how to get from meta queue and figure out which worker

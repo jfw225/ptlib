@@ -7,7 +7,8 @@ from ptlib.core.worker import Worker
 
 
 class EmptyTask:
-    pass
+    def _kill_workers():
+        pass
 
 
 class Task:
@@ -37,6 +38,17 @@ class Task:
         self.next = EmptyTask
         self.input_q = Queue()
 
+        self.id = 0
+
+    @property
+    def name(self):
+        """
+        Formats the name of the task instance by looking at the class 
+        definition.
+        """
+
+        return self.__class__.__name__
+
     def create_map(self, worker: Worker):
         """
         Returns a function that maps input job to output job for a specific 
@@ -53,7 +65,7 @@ class Task:
 
         return map_job
 
-    def create_workers(self, input_q, output_q):
+    def create_workers(self, input_q, output_q, meta_q):
         """
         Returns a list of pt.Worker objects and stores input queue. Overloading 
         this function allows the developer to modify the controller's 
@@ -64,10 +76,10 @@ class Task:
             raise WorkerCreationError(
                 f"Workers already exist for task: {self}")
 
+        # create workers
         for worker_id in range(self.num_workers):
-            self.workers.append(Worker(self, worker_id, input_q, output_q))
-
-        self.input_q = input_q
+            self.workers.append(
+                Worker(self, worker_id, input_q, output_q, meta_q))
 
     def infer_structure(self, input_job):
         """ 
@@ -76,7 +88,7 @@ class Task:
         temporary worker to analyze the output of `map_job(input_job)`.
         """
 
-        worker = Worker(self, 0, Queue(), Queue())
+        worker = Worker(self, 0, Queue(), Queue(), Queue())
         job_map = self.create_map(worker)
         output_job = np.array(job_map(input_job))
 
@@ -84,7 +96,10 @@ class Task:
 
     def __rshift__(self, other):
         """ 
-        Allows tasks to be connected into a pipeline using the `>>` operator. 
+        Allows tasks to be connected into a pipeline using the `>>` operator.
+        This operation finds the last task in linked list of tasks by iterating 
+        over the `task.next` attribute. Assigns `other.id` to the last 
+        task ID + 1. 
         """
 
         if isinstance(other, Task):
@@ -92,6 +107,7 @@ class Task:
             while task.next is not EmptyTask:
                 task = task.next
 
+            other.id = task.id + 1
             task.next = other
 
         return self
@@ -105,10 +121,24 @@ class Task:
         pass
 
     def iter_tasks(self):
+        """
+        Generator that iterates over linked list structure of tasks using the 
+        `task.next` attribute. 
+        """
+
         task = self
         while task is not EmptyTask:
             yield task
             task = task.next
+
+    def _set_input_queue(self, input_q):
+        """
+        Sets `self.input_q=input_q`. This is important because it guarantees 
+        that each queue is not accidently garbage collected before it's used. 
+        Also needed in 'self._kill_workers`.
+        """
+
+        self.input_q = input_q
 
     def _start_workers(self):
         """ 
@@ -120,7 +150,7 @@ class Task:
                 f"Workers have not been created for task: {self}")
 
         for worker in self.workers:
-            worker.start()
+            worker._process.start()
 
     def _workers_running(self):
         """
