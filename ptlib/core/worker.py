@@ -46,10 +46,13 @@ class Worker(BaseManager):
         # link queues to memory
         input_job = input_q._link_mem(create_local=True)
         output_q._link_mem()
-        meta_q._link_mem()
+        meta_buffer = meta_q._link_mem(create_local=True)
 
-        # metadata buffer
-        metadata_buffer = np.array([time_ns(), time_ns()])
+        # set the first job in buffer to task id and worker id
+        meta_buffer[0][:] = [task.id, self.id][:]
+
+        # metadata time buffer
+        time_array = meta_buffer[1]
 
         input_status = BaseQueue.Empty
         while not self.EXIT_FLAG:
@@ -58,10 +61,17 @@ class Worker(BaseManager):
             elif input_status is BaseQueue.Closed:
                 break
 
-            metadata_buffer[0] = time_ns()
+            # record start time
+            time_array[0] = time_ns()
+
+            # map compute output job
             output_job = job_map(input_job)
-            metadata_buffer[1] = time_ns()
-            print("meta q", meta_q.put([metadata_buffer]))
+
+            # record finish time
+            time_array[1] = time_ns()
+
+            # put metadata into queue
+            meta_q.put(meta_buffer)
 
             while output_q.put(output_job) is BaseQueue.Full:
                 pass

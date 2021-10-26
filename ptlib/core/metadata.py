@@ -1,49 +1,59 @@
-import multiprocessing as mp
-from multiprocessing.managers import BaseManager, SyncManager
+from time import time_ns
 
-from ptlib.core._backend import SERVER_ADDRESS
-
-
-def test():
-    print("test")
+from ptlib.core.job import JobSpec
+from ptlib.core.queue import BaseQueue, Queue
 
 
-class MetadataManager(SyncManager):
+class MetadataManager:
     """ *** COME BACK """
 
-    def __init__(self):
+    # job specification for metadata
+    _MetaDataSpec = JobSpec(example=[1, 1]) + \
+        JobSpec(example=[time_ns(), time_ns()])
+
+    # the queue max size
+    meta_q_max_size = 30
+
+    def __init__(self, pipeline):
+        # initialize start and finish times
+        self._start_time = self._finish_time = None
+
+        # create mappings for worker names and metadata
+        self._name_map, self._meta_map = dict(), dict()
+
+        # create initial entries
+        for task in pipeline.iter_tasks():
+            for worker_id in range(task.num_workers):
+                # set name
+                self._name_map[task.id,
+                               worker_id] = f"{task.name}: {worker_id}"
+
+                # set metadata to empty list
+                self._meta_map[task.id, worker_id] = list()
+
+        # queue for retreiving metadata from asnychronous workers
+        self.meta_q = Queue(self._MetaDataSpec, capacity=self.meta_q_max_size)
+
+        # link metadata queue and get local buffer
+        self._meta_buffer = self.meta_q._link_mem(create_local=True)
+
+    def update(self):
         """
-        Must pass the base manager to make `add_worker` available in the
-        asynchronous scope.
+        Update metadata while `self.meta_q` is not empty.
         """
 
-        # initialize multiprocessing manager
-        super().__init__(address=SERVER_ADDRESS)
+        while self.meta_q.get() is not BaseQueue.Empty:
+            index, times = map(tuple, self._meta_buffer)
+            self._meta_map[index].append(times)
 
-        # register `add_worker` with the base manager
-        self.register(self._add_worker.__name__, callable=self._add_worker)
-        self._worker_map = self.dict()
-
-        # start backend server
-        self.start()
-
-        # create worker map
-        print(self._worker_map)
-
-    def _add_worker(self, name, task_id, worker_id):
-        """
-        Called when ptlib.core.worker.Worker is initialized. Registers the
-        worker and shared data structures.
+    def set_time(self):
+        """ 
+        Used to set main pipeline start and finish times. The first call of 
+        tihs function will set the start time, and all subsequent calls will 
+        update the finish time. 
         """
 
-        print("hi")
-
-        # stores pairs of timestamps of when job starts and finishes
-        # pairs = self.list()
-
-        # # latest job start time
-        # latest_start = self.Value("i", 0)
-
-        # self._worker_map[task_id, worker_id] = (name, pairs, latest_start)
-
-        return self._worker_map, self._worker_map
+        if self._start_time is None:
+            self._start_time = time_ns()
+        else:
+            self._finish_time = time_ns()

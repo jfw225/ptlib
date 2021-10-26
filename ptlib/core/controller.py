@@ -6,7 +6,7 @@ from ptlib.core.job import JobSpec
 
 from ptlib.core.metadata import MetadataManager
 from ptlib.core.task import Task, EmptyTask
-from ptlib.core.queue import Queue
+from ptlib.core.queue import BaseQueue, Queue
 
 from typing import Tuple
 
@@ -22,30 +22,31 @@ class Controller:
         mp.set_start_method("spawn", force=True)
 
         # create metadata manager before tasks are set up
-        # metadata_manager = MetadataManager()
+        self.meta_manager = MetadataManager(pipeline)
 
         # store initialization arguments
         self.pipeline = pipeline
         self.queue_max_size = queue_max_size
 
-        # queue for communicating metadata (replace 30 with something to do with total workers)
-        self.meta_q = Queue(
-            JobSpec(example=[time_ns(), time_ns()]), capacity=30)
-
         # set up tasks
         self._set_up_tasks()
 
     def run(self):
+        """ 
+        The main run loop for the pipeline. 
+        """
+
+        # set start time
+        self.meta_manager.set_time()
+
         # start all worker processes
         for task in self.pipeline.iter_tasks():
             task._start_workers()
 
-        # link metadata queue
-        meta_q = self.meta_q
-        meta_q._link_mem()
-
         task = self.pipeline
         while task is not EmptyTask:
+            # update metadata
+            self.meta_manager.update()
 
             # if current task finishes, send kill signal to workers
             if not task._workers_running():
@@ -53,12 +54,13 @@ class Controller:
                 task = task.next
                 task._kill_workers()
 
-        # wait for the workers of each task to sequentially finish
-        # for task in self.pipeline.iter_tasks():
-        #     task._kill_workers()
-        #     while task._workers_running():
-        #         pass
+        # finish retreiving metadata (in case loop exits before getting all metadata)
+        self.meta_manager.update()
 
+        # set finish time
+        self.meta_manager.set_time()
+
+        print(self.meta_manager._meta_map)
         print("controller done")
 
     def _set_up_tasks(self):
@@ -86,7 +88,8 @@ class Controller:
             task._set_input_queue(input_q)
 
             # create workers and assign them to task
-            task.create_workers(input_q, output_q, self.meta_q)
+            task.create_workers(input_q, output_q,
+                                self.meta_manager.meta_q)
 
             # set input queue of task.next to output queue of task
             input_q = output_q
@@ -98,7 +101,7 @@ class Controller:
         task._set_input_queue(input_q)
 
         # create workers and assign them to the final task
-        task.create_workers(input_q, Queue(), self.meta_q)
+        task.create_workers(input_q, Queue(), self.meta_manager.meta_q)
 
     def _add_worker(self, name, task_id, worker_id):
         """

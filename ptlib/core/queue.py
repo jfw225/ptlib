@@ -148,7 +148,7 @@ class FIFOQueue(BaseQueue):
 
         # get payload (must copy because buffer might change in other process)
         for i in self._iter:
-            self._local_job_buffer[i][:] = self._job_buffer[i][sel_index][:]
+            self._local_job_buffer[i] = self._job_buffer[i][sel_index]
 
         # self.input_buffer[:] = self.arr_dat[sel_index][:]
 
@@ -188,7 +188,7 @@ class FIFOQueue(BaseQueue):
 
         # set payload
         for i in self._iter:
-            self._job_buffer[i][sel_index][:] = buffer[i][:]
+            self._job_buffer[i][sel_index] = buffer[i]
 
         # self.arr_dat[sel_index][:] = buffer[:]
 
