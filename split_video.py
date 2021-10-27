@@ -122,3 +122,4 @@ if __name__ == '__main__':
     # create and run controller
     controller = pt.Controller(pipeline, 5)
     controller.run()
+    controller.graph()

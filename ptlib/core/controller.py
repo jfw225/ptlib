@@ -10,6 +10,8 @@ from ptlib.core.queue import BaseQueue, Queue
 
 from typing import Tuple
 
+from ptlib.utils.diagram import Diagram
+
 
 class Controller:
     """ The controller. *** COME BACK *** """
@@ -60,8 +62,18 @@ class Controller:
         # set finish time
         self.meta_manager.set_time()
 
-        print(self.meta_manager._meta_map)
+        print(self.meta_manager._meta)
         print("controller done")
+
+    def graph(self, save_path=""):
+        """
+        Creates and shows parallel timing diagram. If `save_path` is empty, then 
+        the graphs are shown. Otherwise, the graphs are written to 
+        `save_path` as a .pkl file. 
+        """
+
+        diag = Diagram(meta_manager=self.meta_manager)
+        diag.graph_all(save_path)
 
     def _set_up_tasks(self):
         """

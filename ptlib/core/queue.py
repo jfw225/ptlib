@@ -144,7 +144,7 @@ class FIFOQueue(BaseQueue):
 
         # increment get index
         self._arr_sel[1] = (sel_index + 1) % self.capacity
-        print(f"sel get: {sel_index}", self._arr_chk[sel_index])
+        # print(f"sel get: {sel_index}", self._arr_chk[sel_index])
 
         # get payload (must copy because buffer might change in other process)
         for i in self._iter:
@@ -184,7 +184,7 @@ class FIFOQueue(BaseQueue):
 
         # increment set index
         self._arr_sel[0] = (sel_index + 1) % self.capacity
-        print(f"sel put: {sel_index}", self._arr_chk[sel_index])
+        # print(f"sel put: {sel_index}", self._arr_chk[sel_index])
 
         # set payload
         for i in self._iter:

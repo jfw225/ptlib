@@ -40,26 +40,38 @@ class Worker(BaseManager):
         The main processing loop for `task`.
         """
 
-        # create job mapping
-        job_map = task.create_map(self)
-
         # link queues to memory
         input_job = input_q._link_mem(create_local=True)
         output_q._link_mem()
         meta_buffer = meta_q._link_mem(create_local=True)
 
-        # set the first job in buffer to task id and worker id
-        meta_buffer[0][:] = [task.id, self.id][:]
+        # set the first job in buffer to (task id, worker id, and S/F indicator to HIGH)
+        meta_buffer[0][:] = [task.id, self.id, 1][:]
 
         # metadata time buffer
         time_array = meta_buffer[1]
 
+        # give main thread worker start time
+        start_time = time_ns()
+        time_array[:] = [start_time, start_time][:]
+        # (if metadata seems off, add while loop)
+        assert meta_q.put(
+            meta_buffer) is not BaseQueue.Full, "meta q should always put (prejob)"
+
+        # set S/F indicator to LOW
+        meta_buffer[0][-1] = 0
+
+        # create job mapping
+        job_map = task.create_map(self)
+
         input_status = BaseQueue.Empty
         while not self.EXIT_FLAG:
+            t = time_ns()
             if (input_status := input_q.get()) is BaseQueue.Empty:
                 continue
             elif input_status is BaseQueue.Closed:
                 break
+            print(f"Task: {task.id} | Get Time: {time_ns() - t}")
 
             # record start time
             time_array[0] = time_ns()
@@ -70,11 +82,24 @@ class Worker(BaseManager):
             # record finish time
             time_array[1] = time_ns()
 
-            # put metadata into queue
-            meta_q.put(meta_buffer)
+            # put metadata into queue (if metadata seems off, add while loop)
+            assert meta_q.put(
+                meta_buffer) is not BaseQueue.Full, "meta q should always put"
 
+            t = time_ns()
             while output_q.put(output_job) is BaseQueue.Full:
                 pass
+            print(f"Task: {task.id} | Put Time: {(time_ns() - t)/1e9}")
+
+        # record finish time
+        finish_time = time_ns()
+
+        # set S/F indicator to HIGH
+        meta_buffer[0][-1] = 1
+
+        # give main thread worker finish time
+        time_array[:] = [start_time, finish_time][:]
+        meta_q.put(meta_buffer)  # (if metadata seems off, add while loop)
 
         print(f"Worker Done -- Task: {task.name} | ID: {self.id}")
 
