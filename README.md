@@ -4,6 +4,8 @@
 
 - test multiple worker tasks 
 - fix queue from overwriting during put
+- check if lock is being acquired
+- implement option to directly specify job spec
 
 - create requirements file 
 - way to implement task order non linear pipelines
