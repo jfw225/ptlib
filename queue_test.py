@@ -1,17 +1,22 @@
-import os
 import cv2
+import pickle
 import numpy as np
-import multiprocessing as mp
 
 import ptlib as pt
+from ptlib.core.metadata import MetadataManager
+from ptlib.core.queue import Queue
 
 
 class VideoIngest(pt.Task):
-    """ Task for video ingestion. """
-
     # variables here are static
+    NUM_WORKERS = 1
+
     VIDEO_PATH = "C:\\Users\\Owner\\Videos\\Battlefield 2042 Open Beta\\testvid.mp4"
     BATCH_SIZE = 30 * 5  # fps * duartion in seconds
+
+    def __init__(self):
+        # maybe no init
+        super().__init__(num_workers=VideoIngest.NUM_WORKERS)
 
     def create_map(self, worker):
         # create capture object
@@ -62,56 +67,59 @@ class VideoIngest(pt.Task):
         return job_map
 
 
-class VideoWrite(pt.Task):
-    """ Task for writing videos to file. """
+##### pseudo-controller implementation for testing #####
+def run(pipeline, meta_manager, output_q):
+    # link output queue
+    output_q._link_mem(create_local=True)
 
-    VIDEO_PATH = VideoIngest.VIDEO_PATH
-    OUTPUT_PATH = "output/"
+    # set start time
+    meta_manager.set_time()
 
-    def create_map(self, worker):
-        # create output directories
-        clip_name, *_ = os.path.splitext(os.path.basename(self.VIDEO_PATH))
-        output_dir = os.path.join(self.OUTPUT_PATH, clip_name + "-clips")
-        os.makedirs(output_dir, exist_ok=True)
+    # start all worker processes
+    for task in pipeline.iter_tasks():
+        task._start_workers()
 
-        # determine fps and resolution of original video
-        capture = cv2.VideoCapture(self.VIDEO_PATH)
-        fps = int(capture.get(cv2.CAP_PROP_FPS))
-        resolution = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(
-            capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        capture.release()
+    task = pipeline
+    while task is not pt.EmptyTask:
+        # force pull from output queue
+        output_q.get()
 
-        # create batch id counter
-        worker.batch_id = 0
+        # update metadata
+        meta_manager.update()
 
-        def job_map(input_job):
-            if input_job is pt.Task.Exit:
-                self.EXIT_FLAG = True
-                return None
+        # if current task finishes, send kill signal to workers
+        if not task._workers_running():
+            print(f"Task Finished: {task.name}")
+            task = task.next
+            task._kill_workers()
 
-            batch = input_job[0]
+    # finish retreiving metadata (in case loop exits before getting all metadata)
+    meta_manager.update()
 
-            path = os.path.join(
-                output_dir, f"{clip_name}-{worker.id}-{worker.batch_id}.mp4")
-            video = cv2.VideoWriter(
-                path, cv2.VideoWriter_fourcc(*"mp4v"), fps, resolution)
-
-            for frame in batch:
-                video.write(frame)
-
-            video.release()
-            worker.batch_id += 1
-
-            return [None]
-
-        return job_map
+    # set finish time
+    meta_manager.set_time()
 
 
 if __name__ == '__main__':
     # create pipeline
-    pipeline = VideoIngest(num_workers=2) >> VideoWrite(num_workers=1)
+    pipeline = VideoIngest()
+
+    # infer output
+    output_job, job_specs = pipeline.infer_structure(None)
+
+    # create I/O queues
+    input_q, output_q = Queue(), Queue(job_specs, capacity=5)
+
+    # create metadata manager
+    meta_manager = MetadataManager(pipeline)
+
+    # create workers and assign them to task
+    pipeline.create_workers(input_q, output_q, meta_manager.meta_q)
+
+    # start pseudo-controller
+    run(pipeline, meta_manager, output_q)
 
     # create and run controller
-    controller = pt.Controller(pipeline, 10)
-    controller.run()
-    controller.graph()
+    # controller = pt.Controller(pipeline, 5)
+    # controller.run()
+    # controller.graph()

@@ -1,3 +1,4 @@
+from typing import NoReturn
 import numpy as np
 
 from multiprocessing.managers import BaseManager
@@ -9,36 +10,28 @@ from ptlib.core.metadata import MetadataManager
 from ptlib.core.queue import BaseQueue
 
 
-class Worker(BaseManager):
+class Worker:
     """ Worker class. *** come back*** """
 
-    def __init__(self, task, worker_id, input_q, output_q, meta_q):
+    def __init__(self, Task, num_workers, task_id, worker_id, input_q, output_q, meta_q):
         self.EXIT_FLAG = False
+        self.num_workers = num_workers
+        self.task_id = task_id
         self.id = worker_id
 
         # create worker process
         self._process = Process(target=self.work,
-                                args=(task, input_q, output_q, meta_q),
+                                args=(Task, input_q,
+                                      output_q, meta_q),
                                 daemon=True)
 
-        # initialize multiprocessing base manager
-        super().__init__(address=SERVER_ADDRESS)
-
-        # connect to metadata server and register add worker function
-        # self.register(MetadataManager._add_worker.__name__)
-        # self.connect()
-        # # self.start()
-
-        # # get metadata shared memory objects
-        # pairs, latest_on = getattr(self, MetadataManager._add_worker.__name__)(
-        #     task.name, task.id, self.id)
-
-        # print(pairs, latest_on)
-
-    def work(self, task, input_q, output_q, meta_q):
+    def work(self, Task, input_q, output_q, meta_q):
         """
         The main processing loop for `task`.
         """
+
+        # create task object and set correct task id
+        task = Task(num_workers=self.num_workers, task_id=self.task_id)
 
         # link queues to memory
         input_job = input_q._link_mem(create_local=True)
@@ -65,13 +58,14 @@ class Worker(BaseManager):
         job_map = task.create_map(self)
 
         input_status = BaseQueue.Empty
+
         while not self.EXIT_FLAG:
-            t = time_ns()
+            # t = time_ns()
             if (input_status := input_q.get()) is BaseQueue.Empty:
                 continue
             elif input_status is BaseQueue.Closed:
                 break
-            print(f"Task: {task.id} | Get Time: {time_ns() - t}")
+            # print(f"Task: {task.id} | Get Time: {time_ns() - t}")
 
             # record start time
             time_array[0] = time_ns()

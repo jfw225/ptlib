@@ -90,7 +90,7 @@ class Controller:
             if task.next is EmptyTask:
                 break
 
-            # try to infer output job structure
+            # try to infer output job structure and set output to input of next task
             input_job, job_specs = task.infer_structure(input_job)
 
             # create and store output queue

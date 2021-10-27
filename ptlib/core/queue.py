@@ -4,6 +4,7 @@ from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import Lock
 
 from typing import Tuple
+from time import time_ns
 
 from ptlib.core.job import JobSpec, Job
 
@@ -187,10 +188,10 @@ class FIFOQueue(BaseQueue):
         # print(f"sel put: {sel_index}", self._arr_chk[sel_index])
 
         # set payload
+        # t = time_ns()  # REMOVE
         for i in self._iter:
             self._job_buffer[i][sel_index] = buffer[i]
-
-        # self.arr_dat[sel_index][:] = buffer[:]
+        # print(f"Task: {0} | Buffer Load: {(time_ns() - t)/1e9}")
 
         # release selection lock
         self._lock_sel.release()
@@ -230,26 +231,28 @@ class FIFOQueue(BaseQueue):
                 [JobSpec(job_spec.shape[1:], job_spec.dtype)
                  for job_spec in self._job_specs])
 
-        # for job_spec, shm_dat in zip(self._job_specs, self._job_shms):
-        #     self._job_buffer.append(np.ndarray(job_spec.shape,
-        #                                         dtype=job_spec.dtype,
-        #                                         buffer=shm_dat.buf))
-        #     self._local_job_buffer.append(np.ndarray(
-        #         job_spec.shape[1:], job_spec.dtype))
-
-        # link arrays to buffers in memory
-        # self.arr_dat = np.ndarray(
-        #     self.shape, dtype=self.dtype, buffer=self.shm_dat.buf)
+        # link selection and check arrays to buffers in memory
         self._arr_sel = np.ndarray(
             3, dtype=np.int8, buffer=self._shm_sel.buf)
         self._arr_chk = np.ndarray(
             self.capacity, dtype=np.int8, buffer=self._shm_chk.buf)
-        # self.input_buffer = np.zeros(self.shape[1:], dtype=self.dtype)
 
         # set linked flag to HIGH
         self._is_linked = True
 
         return self._local_job_buffer
+
+    # def _generate_dynamic_put(self):
+    #     print("generating dynamic put")
+    #     f = open("_dptest.py", "w")
+    #     f.write("def _put(_job_buffer, buffer, sel_index):\n")
+    #     for i in self._iter:
+    #         f.write(f"\t_job_buffer[{i}][sel_index]=buffer[{i}]\n")
+
+    #     f.close()
+
+    #     dp = __import__("_dptest", fromlist=["_put"])
+    #     self._put = dp._put
 
 
 def Queue(job_specs: JobSpec = None,

@@ -33,13 +33,18 @@ class Task:
     # ---------------------------------------------------------------------- #
     # Constructors
 
-    def __init__(self, num_workers):
+    def __init__(self, num_workers: int = 1, task_id: int = 0):
+        """
+        When subclassing `Task`, do not implement a different init, or if you 
+        do, don't change the arguments.
+        """
+
         self.num_workers = num_workers
+        self.id = task_id
+
         self.workers = list()
         self.next = EmptyTask
         self.input_q = Queue()
-
-        self.id = 0
 
     @property
     def name(self):
@@ -90,9 +95,10 @@ class Task:
                 f"Workers already exist for task: {self}")
 
         # create workers
+        from copy import copy
         for worker_id in range(self.num_workers):
             self.workers.append(
-                Worker(self, worker_id, input_q, output_q, meta_q))
+                Worker(self.__class__, self.num_workers, self.id, worker_id, input_q, output_q, meta_q))
 
     def infer_structure(self, input_job):
         """
@@ -101,7 +107,7 @@ class Task:
         temporary worker to analyze the output of `map_job(input_job)`.
         """
 
-        worker = Worker(self, 0, Queue(), Queue(), Queue())
+        worker = Worker(self.__class__, 0, 0, 0, Queue(), Queue(), Queue())
         output_job = self.create_map(worker)(input_job)
         job_specs = JobSpec.from_output_job(output_job)
 
