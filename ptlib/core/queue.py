@@ -1,4 +1,5 @@
 
+from typing_extensions import runtime
 import numpy as np
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import Lock
@@ -113,15 +114,6 @@ class FIFOQueue(BaseQueue):
         # flag to check if arrays have been linked in current context
         self._is_linked = False
 
-    @property
-    def job(self):
-        """
-        Calling this creates an internal job buffer and stores it as 
-        `self._local_job_buffer`. 
-        """
-
-        return self._local_job_buffer
-
     def get(self):
         """
         Attemps to retreive data from shared memory. If the selected index is 
@@ -149,7 +141,7 @@ class FIFOQueue(BaseQueue):
 
         # get payload (must copy because buffer might change in other process)
         for i in self._iter:
-            self._local_job_buffer[i] = self._job_buffer[i][sel_index]
+            self._local_job_buffer[i][:] = self._job_buffer[i][sel_index]
 
         # self.input_buffer[:] = self.arr_dat[sel_index][:]
 
@@ -170,7 +162,9 @@ class FIFOQueue(BaseQueue):
         """
 
         # acquire selection lock
+        t = time_ns()
         self._lock_sel.acquire()
+        print((time_ns() - t)/1e9)
 
         # set index
         sel_index = self._arr_sel[0]
@@ -190,7 +184,7 @@ class FIFOQueue(BaseQueue):
         # set payload
         # t = time_ns()  # REMOVE
         for i in self._iter:
-            self._job_buffer[i][sel_index] = buffer[i]
+            self._job_buffer[i][sel_index][:] = buffer[i]
         # print(f"Task: {0} | Buffer Load: {(time_ns() - t)/1e9}")
 
         # release selection lock

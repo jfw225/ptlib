@@ -73,6 +73,7 @@ class Controller:
         """
 
         diag = Diagram(meta_manager=self.meta_manager)
+        print(diag)
         diag.graph_all(save_path)
 
     def _set_up_tasks(self):

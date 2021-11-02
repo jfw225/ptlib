@@ -109,9 +109,9 @@ class VideoWrite(pt.Task):
 
 if __name__ == '__main__':
     # create pipeline
-    pipeline = VideoIngest(num_workers=2) >> VideoWrite(num_workers=1)
+    pipeline = VideoIngest(num_workers=2) >> VideoWrite(num_workers=2)
 
     # create and run controller
-    controller = pt.Controller(pipeline, 10)
+    controller = pt.Controller(pipeline, 5)
     controller.run()
     controller.graph()
