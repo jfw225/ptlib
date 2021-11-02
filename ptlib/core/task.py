@@ -55,6 +55,9 @@ class Task:
 
         return self.__class__.__name__
 
+    # ---------------------------------------------------------------------- #
+    # Methods that can be Overloaded by Developer
+
     def create_map(self, worker: Worker):
         """
         Returns a function that maps input job to output job for a specific
@@ -83,6 +86,15 @@ class Task:
 
         return map_job
 
+    def get_example_job(self):
+        """
+        Returns an object resembling the output job of this task. If this is 
+        not overloaded by the developer, the controller will try to infer the 
+        structure of the output job. 
+        """
+
+        return None
+
     def create_workers(self, input_q, output_q, meta_q):
         """
         Returns a list of pt.Worker objects and stores input queue. Overloading
@@ -100,36 +112,14 @@ class Task:
             self.workers.append(
                 Worker(self.__class__, self.num_workers, self.id, worker_id, input_q, output_q, meta_q))
 
-    def infer_structure(self, input_job):
+    def get_total_jobs(self):
         """
-        Tries to infer the structure (shape, dtype) of task's output job an
-        example input job. This is done by creating (and later deleting) a
-        temporary worker to analyze the output of `map_job(input_job)`.
-        """
-
-        worker = Worker(self.__class__, 0, 0, 0, Queue(), Queue(), Queue())
-        output_job = self.create_map(worker)(input_job)
-        job_specs = JobSpec.from_output_job(output_job)
-
-        return output_job, job_specs
-
-    def __rshift__(self, other):
-        """
-        Allows tasks to be connected into a pipeline using the `>>` operator.
-        This operation finds the last task in linked list of tasks by iterating
-        over the `task.next` attribute. Assigns `other.id` to the last
-        task ID + 1.
+        Returns the number of jobs processed by the pipeline. This is used for 
+        runtime analytics. If needed, this should be overloaded in the first 
+        task of the pipeline. 
         """
 
-        if isinstance(other, Task):
-            task = self
-            while task.next is not EmptyTask:
-                task = task.next
-
-            other.id = task.id + 1
-            task.next = other
-
-        return self
+        return None
 
     def cleanup(self):
         """
@@ -138,6 +128,24 @@ class Task:
         """
 
         pass
+
+    # ---------------------------------------------------------------------- #
+    # Private and Protected Methods
+
+    def _infer_structure(self, input_job):
+        """
+        Tries to infer the structure (shape, dtype) of task's output job an
+        example input job. This is done by creating (and later deleting) a
+        temporary worker to analyze the output of `map_job(input_job)`.
+        """
+
+        input_job = self.get_example_job() or input_job
+
+        worker = Worker(self.__class__, 0, 0, 0, Queue(), Queue(), Queue())
+        output_job = self.create_map(worker)(input_job)
+        job_specs = JobSpec.from_output_job(output_job)
+
+        return output_job, job_specs
 
     def iter_tasks(self):
         """
@@ -169,7 +177,7 @@ class Task:
                 f"Workers have not been created for task: {self}")
 
         for worker in self.workers:
-            worker._process.start()
+            worker.start()
 
     def _workers_running(self):
         """
@@ -184,3 +192,23 @@ class Task:
         """
 
         self.input_q.close()
+
+    def __rshift__(self, other):
+        """
+        Allows tasks to be connected into a pipeline using the `>>` operator.
+        This operation finds the last task in linked list of tasks by iterating
+        over the `task.next` attribute. Assigns `other.id` to the last
+        task ID + 1.
+        """
+
+        if isinstance(other, Task):
+            task = self
+            while task.next is not EmptyTask:
+                task = task.next
+
+            other.id = task.id + 1
+            task.next = other
+
+        return self
+
+    # ---------------------------------------------------------------------- #

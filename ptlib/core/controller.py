@@ -18,13 +18,29 @@ class Controller:
 
     def __init__(self,
                  pipeline: Task,
-                 queue_max_size: int = 5):
+                 queue_max_size: int = 5,
+                 total_jobs: int = None):
+        """
+        Parameters:
+            pipeline: ptlib.Task
+                Task or pipeline of tasks connected by `>>` operator.
+            queue_max_size: (optional) int
+                The the maximum number of jobs that can be stored in a queue.
+            total_jobs: (optional) int
+                The number of jobs being processed by the pipeline. Used for 
+                runtime analytics, not computation. Can be passed as an 
+                argument or set by overloading the `Task.get_total_jobs` 
+                function in the first task of `pipeline`.
+        """
 
         # for process start method to spawn correctly
         mp.set_start_method("spawn", force=True)
 
+        # get the number of jobs intended to be processed by the pipeline
+        total_jobs = total_jobs or pipeline.get_total_jobs()
+
         # create metadata manager before tasks are set up
-        self.meta_manager = MetadataManager(pipeline)
+        self.meta_manager = MetadataManager(pipeline, total_jobs)
 
         # store initialization arguments
         self.pipeline = pipeline
@@ -92,7 +108,7 @@ class Controller:
                 break
 
             # try to infer output job structure and set output to input of next task
-            input_job, job_specs = task.infer_structure(input_job)
+            input_job, job_specs = task._infer_structure(input_job)
 
             # create and store output queue
             output_q = Queue(job_specs, capacity=self.queue_max_size)

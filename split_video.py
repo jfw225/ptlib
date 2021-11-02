@@ -61,6 +61,12 @@ class VideoIngest(pt.Task):
 
         return job_map
 
+    def get_total_jobs(self):
+        capture = cv2.VideoCapture(self.VIDEO_PATH)
+        num_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        return num_frames
+
 
 class VideoWrite(pt.Task):
     """ Task for writing videos to file. """

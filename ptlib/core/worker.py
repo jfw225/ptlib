@@ -10,7 +10,7 @@ from ptlib.core.metadata import MetadataManager
 from ptlib.core.queue import BaseQueue
 
 
-class Worker:
+class Worker(Process):
     """ Worker class. *** come back*** """
 
     def __init__(self, Task, num_workers, task_id, worker_id, input_q, output_q, meta_q):
@@ -20,10 +20,10 @@ class Worker:
         self.id = worker_id
 
         # create worker process
-        self._process = Process(target=self.work,
-                                args=(Task, input_q,
-                                      output_q, meta_q),
-                                daemon=True)
+        super().__init__(target=self.work,
+                         args=(Task, input_q,
+                               output_q, meta_q),
+                         daemon=True)
 
     def work(self, Task, input_q, output_q, meta_q):
         """
@@ -83,7 +83,10 @@ class Worker:
             t = time_ns()
             while output_q.put(output_job) is BaseQueue.Full:
                 pass
-            print(f"Task: {task.id} | Put Time: {(time_ns() - t)/1e9}")
+            # print(f"Task: {task.id} | Put Time: {(time_ns() - t)/1e9}")
+
+        # run cleanup routine
+        task.cleanup()
 
         # record finish time
         finish_time = time_ns()
@@ -96,10 +99,3 @@ class Worker:
         meta_q.put(meta_buffer)  # (if metadata seems off, add while loop)
 
         print(f"Worker Done -- Task: {task.name} | ID: {self.id}")
-
-    def is_alive(self):
-        """
-        Indicates if worker is still working on jobs.
-        """
-
-        return self._process.is_alive()

@@ -13,6 +13,8 @@ from ptlib.core.job import JobSpec, Job
 class BaseQueue:
     """ Queue. *** COME BACK *** """
 
+    class Wait:
+        """ Flag for lock acquisition wait. """
     class Empty:
         """ Flag for emtpy queue. """
 
@@ -129,10 +131,10 @@ class FIFOQueue(BaseQueue):
         sel_index = self._arr_sel[1]
 
         # if get index == set index and check[set] is low, wait for check[set] to be high
-        if self._arr_chk[sel_index] == 0:
+        if self._arr_chk[sel_index] == 0:  # queue is either empty or closed
             self._lock_sel.release()
             # print(f"sel get: {sel_index} returning False", self._arr_chk[sel_index])
-            # if `arr_chk[sel_index] == 0 && arr_sel[2] == 1` then queue must be closed
+
             return BaseQueue.Empty if self._arr_sel[2] == 0 else BaseQueue.Closed
 
         # increment get index
@@ -162,19 +164,16 @@ class FIFOQueue(BaseQueue):
         """
 
         # acquire selection lock
-        t = time_ns()
         self._lock_sel.acquire()
-        print((time_ns() - t)/1e9)
 
         # set index
         sel_index = self._arr_sel[0]
 
         # if set index == get index and check[get] is high, wait for check[get] to be low
-        if self._arr_chk[sel_index] == 1:
+        if self._arr_chk[sel_index] == 1:  # queue is either full or closed
             self._lock_sel.release()
             # print(f"sel put: {sel_index} returning False", self._arr_chk[sel_index])
-            # if `arr_chk[sel_index] == 1 && arr_sel[2] == 1` then queue must be closed
-            assert self._arr_sel[2] == 0, "should never try to put to a closed array"
+
             return BaseQueue.Full if self._arr_sel[2] == 0 else BaseQueue.Closed
 
         # increment set index

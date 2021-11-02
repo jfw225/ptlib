@@ -9,7 +9,7 @@ class MetadataManager:
     """
     Class to abstract metadata initialization and updates. Metadata is 
     transported through a `ptlib.core.queue.FIFOQueue` as if it were a job.
-    
+
     Attributes:
         metadata_spec -- ptlib.core.job.JobSpec
             The specification for the metadata queue which has two jobs. The 
@@ -22,6 +22,8 @@ class MetadataManager:
             [start time, finish time], where each time is in nanoseconds.
         meta_q_cap -- int
             The capacity of the metadata queue. 
+        _total_jobs -- int
+            The number of jobs processed by the pipeline.
         _start -- int
             The start time in nanoseconds of the overall pipeline (the time at 
             which the `run` function of the controller was called). 
@@ -46,11 +48,14 @@ class MetadataManager:
     # the queue max size
     meta_q_cap = ptconfig._METADATA.QUEUE_MAX_SIZE
 
-    def __init__(self, pipeline):
+    def __init__(self, pipeline, total_jobs=None):
+        # store total number of jobs processed by the pipeline
+        self._total_jobs = total_jobs
+
         # initialize start and finish times
         self._start = self._finish = None
 
-        # create mappings for worker names and metadata 
+        # create mappings for worker names and metadata
         self._names, self._meta = dict(), dict()
 
         # create initial entries
@@ -64,7 +69,7 @@ class MetadataManager:
                 self._meta[task.id, worker_id] = [None]
 
         # queue for retreiving metadata from asnychronous workers
-        self.meta_q = Queue(self.metadata_spec, 
+        self.meta_q = Queue(self.metadata_spec,
                             capacity=self.meta_q_cap)
 
         # link metadata queue and get local buffer
@@ -78,11 +83,11 @@ class MetadataManager:
         while self.meta_q.get() is not BaseQueue.Empty:
             # get the index and new metadata
             (*index, sf_ind), new_meta = map(tuple, self._meta_buffer)
-            
+
             # if the S/F indicator is HIGH, set the first index
             if sf_ind == 1:
                 self._meta[tuple(index)][0] = new_meta
-            
+
             # otherwise add job metadata to list
             else:
                 self._meta[tuple(index)].append(new_meta)

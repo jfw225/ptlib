@@ -16,7 +16,14 @@ class Diagram:
     # spacing between timing curves in the PTD
     PTD_SPACING = PTCONFIG._DIAGRAM.PTD_SPACING
 
+    # width of strings printed to console
+    CONSOLE_WIDTH = PTCONFIG._DIAGRAM.CONSOLE_WIDTH
+
+    # time scaling divider
+    TIME_DIV = PTCONFIG._DIAGRAM.TIME_DIV
+
     def __init__(self,
+                 total_jobs: int = None,
                  start_time: int = None,
                  finish_time: int = None,
                  process_names: dict[str] = None,
@@ -25,6 +32,8 @@ class Diagram:
                  meta_manager: MetadataManager = None):
         """
         Parameters:
+            total_jobs -- int
+                The number of jobs processed by the pipeline.
             start_time -- int
                 The start time of the main process in nanoseconds.
             finish_time: int
@@ -40,6 +49,7 @@ class Diagram:
         assert isinstance(
             meta_manager, MetadataManager), f"meta_manager is the wrong type: {type(meta_manager)}"
 
+        self._total_jobs = meta_manager._total_jobs if meta_manager else total_jobs
         self._start = meta_manager._start if meta_manager else start_time
         self._finish = meta_manager._finish if meta_manager else finish_time
 
@@ -52,7 +62,7 @@ class Diagram:
 
         # create diagram plots
         self.ax_ptd = plt.subplot2grid((2, 3), (0, 0), colspan=5)
-        self.ax_edges = plt.subplot2grid((2, 3), (1, 0), colspan=1)
+        self.ax_jobs = plt.subplot2grid((2, 3), (1, 0), colspan=1)
         self.ax_times = plt.subplot2grid((2, 3), (1, 1), colspan=1)
         self.ax_rates = plt.subplot2grid((2, 3), (1, 2), colspan=1)
 
@@ -112,23 +122,23 @@ class Diagram:
         print("Generating PTD Stats Bar Graph...")
 
         stats = self.get_stats(graph=True)
-        names, worker_ids, num_edges, \
+        names, worker_ids, num_jobs, \
             times_on, times_off, rates_on, rates_off = zip(*stats)
 
         x = np.arange(len(names))
         width = 0.5
 
-        # Edges
-        edges_bar = self.ax_edges.bar(x, num_edges, width)
-        self.ax_edges.bar_label(edges_bar, padding=2)
-        self.ax_edges.set_ylabel("n")
-        self.ax_edges.set_xticks(x)
-        self.ax_edges.set_xticklabels(names, rotation=315)
-        self.ax_edges.set_title("Number of Edges")
+        # jobs
+        jobs_bar = self.ax_jobs.bar(x, num_jobs, width)
+        self.ax_jobs.bar_label(jobs_bar, padding=2)
+        self.ax_jobs.set_ylabel("n")
+        self.ax_jobs.set_xticks(x)
+        self.ax_jobs.set_xticklabels(names, rotation=315)
+        self.ax_jobs.set_title("Number of Jobs")
 
-        # Times
-        times_on = np.around(np.array(times_on) / 1e9, decimals=2)
-        times_off = np.around(np.array(times_off) / 1e9, decimals=2)
+        # times
+        times_on = np.around(np.array(times_on) / self.TIME_DIV, decimals=2)
+        times_off = np.around(np.array(times_off) / self.TIME_DIV, decimals=2)
         times_on_bar = self.ax_times.bar(
             x - (width - .15) / 2, times_on, (width - .15), label="On")
         times_off_bar = self.ax_times.bar(
@@ -141,19 +151,19 @@ class Diagram:
         self.ax_times.set_title("Time Spent")
         self.ax_times.legend()
 
-        # Rates
-        rates_on = np.around(np.array(rates_on) * 1e9, decimals=2)
-        rates_off = np.around(np.array(rates_off) * 1e9, decimals=2)
+        # rates
+        rates_on = np.around(np.array(rates_on) * self.TIME_DIV, decimals=2)
+        rates_off = np.around(np.array(rates_off) * self.TIME_DIV, decimals=2)
         rates_on_bar = self.ax_rates.bar(
             x - (width - .15) / 2, rates_on, (width - .15), label="On")
         rates_off_bar = self.ax_rates.bar(
             x + (width - .15) / 2, rates_off, (width - .15), label="Off")
         self.ax_rates.bar_label(rates_on_bar, padding=2)
         self.ax_rates.bar_label(rates_off_bar, padding=2)
-        self.ax_rates.set_ylabel("Rate (edge / s)")
+        self.ax_rates.set_ylabel("Rate (jobs / s)")
         self.ax_rates.set_xticks(x)
         self.ax_rates.set_xticklabels(names, rotation=315)
-        self.ax_rates.set_title("Edge Rate")
+        self.ax_rates.set_title("Job Rate")
         self.ax_rates.legend()
 
     def table_stats(self):
@@ -172,7 +182,7 @@ class Diagram:
         stats = list()
         for (task_id, worker_id), (name, metadata) in self._meta.items():
 
-            num_edges = len(metadata)
+            num_jobs = len(metadata)
             time_on = time_off = 0
 
             # Start and finish times are specificed by first pair
@@ -192,10 +202,10 @@ class Diagram:
                 time_off += finish - off_since
 
             # calculate rates
-            rate_on = num_edges / time_on if time_on else 0
-            rate_off = num_edges / time_off if time_on else 0
+            rate_on = num_jobs / time_on if time_on else 0
+            rate_off = num_jobs / time_off if time_on else 0
 
-            stats.append((name, worker_id, num_edges, time_on,
+            stats.append((name, worker_id, num_jobs, time_on,
                           time_off, rate_on, rate_off))
 
         return stats
@@ -234,12 +244,25 @@ class Diagram:
     def __str__(self):
         """ Formats the timing diagram statistics in a readable way. """
 
-        s = ""
-        for name, worker_id, num_edges, time_on, time_off, rate_on, rate_off in self.get_stats():
+        s = "=" * self.CONSOLE_WIDTH + "\n"
+
+        # print overall performance
+        runtime = (self._finish - self._start) / self.TIME_DIV
+        jps = self._total_jobs / runtime
+        s += "\n*** OVERALL PERFORMANCE: "
+        s += f" | Pipeline Runtime: {runtime} s"
+        s += f" | Processed {self._total_jobs} jobs @ {jps:.2f} j/s ***\n\n"
+
+        # print job specific performance
+        for name, worker_id, num_jobs, time_on, time_off, rate_on, rate_off in self.get_stats():
+            stat_array = [time_on / self.TIME_DIV, time_off / self.TIME_DIV,
+                          rate_on * self.TIME_DIV, rate_off * self.TIME_DIV]
             time_on, time_off, rate_on, rate_off = np.around(
-                [time_on/1e9, time_off/1e9, rate_on*1e9, rate_off*1e9], decimals=2)
-            s += f"Task: {name} & Worker ID: {worker_id} -- {num_edges} edges"
+                stat_array, decimals=2)
+            s += f"Task: {name} & Worker ID: {worker_id} -- {num_jobs} jobs"
             s += f" | {time_on} s on, {time_off} s off"
-            s += f" | {rate_on} e/s on, {rate_off} e/s off\n"
+            s += f" | {rate_on} j/s on, {rate_off} j/s off\n"
+
+        s += "\n" + "=" * self.CONSOLE_WIDTH
 
         return s

@@ -79,3 +79,6 @@ class Job(np.ndarray):
                                 buffer=buf)
 
         return job.view(cls)
+
+
+# class Job(np.ndarray):
