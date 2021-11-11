@@ -35,7 +35,7 @@ class Worker(Process):
 
         # link queues to memory
         input_job = input_q._link_mem(create_local=True)
-        output_q._link_mem()
+        output_job_buf = output_q._link_mem(create_local=True)
         meta_buffer = meta_q._link_mem(create_local=True)
 
         # set the first job in buffer to (task id, worker id, and S/F indicator to HIGH)
@@ -72,6 +72,11 @@ class Worker(Process):
 
             # map compute output job
             output_job = job_map(input_job)
+
+            print(output_job_buf)
+            for i in range(len(output_job)):
+                print(output_job_buf[i].shape, output_job[i].shape)
+                output_job_buf[i][:] = output_job[i]
 
             # record finish time
             time_array[1] = time_ns()

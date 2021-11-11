@@ -201,13 +201,15 @@ class Task:
         task ID + 1.
         """
 
-        if isinstance(other, Task):
-            task = self
-            while task.next is not EmptyTask:
-                task = task.next
+        if not isinstance(other, Task):
+            return self
 
-            other.id = task.id + 1
-            task.next = other
+        task = self
+        while task.next is not EmptyTask:
+            task = task.next
+
+        other.id = task.id + 1
+        task.next = other
 
         return self
 

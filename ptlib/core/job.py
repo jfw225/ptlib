@@ -28,8 +28,9 @@ class JobSpec(list):
             example = np.array(example)
             shape, dtype = example.shape, example.dtype
 
-        self.shape = shape
+        self.shape = np.array(shape, dtype=np.ulonglong)
         self.dtype = dtype
+        self.nbytes = int(np.nbytes[self.dtype] * np.product(self.shape))
 
     @classmethod
     def from_output_job(cls, output_job: "Job" or np.ndarray):
@@ -81,4 +82,56 @@ class Job(np.ndarray):
         return job.view(cls)
 
 
-# class Job(np.ndarray):
+class JobInfer(dict):
+    """ object used for inferring job structures """
+
+    def __init__(self):
+        super().__init__()
+
+    def infer(self):
+        """
+        Tries to infer job structure from what is stored in `self`. 
+        """
+
+
+def temp(input_job, output_job):
+    j1 = input_job[0]
+
+    output_job[0] = 1
+
+
+class Jobb(np.ndarray):
+    """
+    calculate the total buffer size
+    allocate buffer in memory
+    link individual arrays using offset and shape
+
+    start with get:
+        create a data array size of buffer
+        on get, load buffer data into array
+        give smaller arrays as the input jobs"""
+
+    def __new__(cls, job_specs: JobSpec):
+        """
+        Returns job array with buffer. (*** FIX)
+        """
+
+        # calculate size of buffer
+        nbytes = sum([job_spec.nbytes for job_spec in job_specs])
+
+        # create buffer array (int8 to secure `nbytes`)
+        buffer = np.empty(nbytes, dtype=np.int8)
+
+        # create job array
+        job = np.ndarray(len(job_specs), dtype=object)
+
+        # fill job array
+        job_offset = 0
+        for i, job_spec in enumerate(job_specs):
+            job[i] = np.ndarray(shape=job_spec.shape,
+                                dtype=job_spec.dtype,
+                                buffer=buffer,
+                                offset=job_offset)
+            job_offset += job_spec.nbytes
+
+        return job.view(cls), buffer

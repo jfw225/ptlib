@@ -7,6 +7,8 @@ This library that aims to decrease the latency of shared-memory-based communicat
 ### TODO
 
 - implement option to directly specify job spec
+- infer job by passing a list into `output_job`, have job map assign 
+indices like before, and then iterate over jobs and infer shape
 
 - create requirements file 
 - way to implement task order non linear pipelines
@@ -21,6 +23,7 @@ This library that aims to decrease the latency of shared-memory-based communicat
 
 
 
+- *** instead of creating controller, decorate tasks
 - *** CHANGE queue to hold selection index until job is done so we dont have to copy data from buffer
 - *** have put copy directly to output buffer (this may mean locking down output buffer before task starts)
 - *** try to figure out optimal worker numbers under constraints

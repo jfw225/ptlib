@@ -7,7 +7,7 @@ from multiprocessing import Lock
 from typing import Tuple
 from time import time_ns
 
-from ptlib.core.job import JobSpec, Job
+from ptlib.core.job import JobSpec, Job, Jobb
 
 
 class BaseQueue:
@@ -95,6 +95,10 @@ class FIFOQueue(BaseQueue):
 
             self._job_shms.append(SharedMemory(create=True, size=data_nbytes))
 
+        # calculate size of data buffer
+        self.nbytes = sum([job_spec.nbytes for job_spec in job_specs])
+        self._shm_dat = SharedMemory(create=True, size=capacity * self.nbytes)
+
         # create shared memory objects
         self._shm_sel = SharedMemory(create=True, size=3)
         self._shm_chk = SharedMemory(create=True, size=capacity)
@@ -142,8 +146,10 @@ class FIFOQueue(BaseQueue):
         # print(f"sel get: {sel_index}", self._arr_chk[sel_index])
 
         # get payload (must copy because buffer might change in other process)
-        for i in self._iter:
-            self._local_job_buffer[i][:] = self._job_buffer[i][sel_index]
+        # for i in self._iter:
+        #     self._local_job_buffer[i][:] = self._job_buffer[i][sel_index]
+
+        self._local_job_buffer[:] = self._job_buffer[sel_index]
 
         # self.input_buffer[:] = self.arr_dat[sel_index][:]
 
@@ -182,8 +188,13 @@ class FIFOQueue(BaseQueue):
 
         # set payload
         # t = time_ns()  # REMOVE
-        for i in self._iter:
-            self._job_buffer[i][sel_index][:] = buffer[i]
+        # for i in self._iter:
+        #     self._job_buffer[i][sel_index][:] = buffer[i]
+
+        # print(self._job_buffer, buffer)
+        # buffer = np.concatenate([np.array(arr).flatten() for arr in buffer])
+        # self._job_buffer[sel_index][:] = buffer
+        self._job_buffer[sel_index][:] = self._local_job_buffer
         # print(f"Task: {0} | Buffer Load: {(time_ns() - t)/1e9}")
 
         # release selection lock
@@ -216,13 +227,20 @@ class FIFOQueue(BaseQueue):
         """
 
         # allocate new job buffers and link them to their buffers in memory
-        self._job_buffer = Job(self._job_specs, buffers=self._job_shms)
+        # self._job_buffer = Job(self._job_specs, buffers=self._job_shms)
+        self._job_buffer = np.ndarray((self.capacity, self.nbytes),
+                                      dtype=np.int8,
+                                      buffer=self._shm_dat.buf)
 
         # drop `self.capacity` from each job spec and create job arrays
+        input_jobs = None
         if create_local:
-            self._local_job_buffer = Job(
-                [JobSpec(job_spec.shape[1:], job_spec.dtype)
-                 for job_spec in self._job_specs])
+            # self._local_job_buffer = Job(
+            #     [JobSpec(job_spec.shape[1:], job_spec.dtype)
+            #      for job_spec in self._job_specs])
+
+            input_jobs, self._local_job_buffer = Jobb([JobSpec(job_spec.shape[1:], job_spec.dtype)
+                                                       for job_spec in self._job_specs])
 
         # link selection and check arrays to buffers in memory
         self._arr_sel = np.ndarray(
@@ -233,7 +251,8 @@ class FIFOQueue(BaseQueue):
         # set linked flag to HIGH
         self._is_linked = True
 
-        return self._local_job_buffer
+        # return self._local_job_buffer
+        return input_jobs
 
     # def _generate_dynamic_put(self):
     #     print("generating dynamic put")
