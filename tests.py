@@ -28,10 +28,11 @@ class TestCase:
             f"\nTest Case: {self.fn.__name__} | ID: {self.test_id}\n"
         for i, (actual, expected) in enumerate(zip(solutions, self.solutions)):
             s += f"\n\tOutput {i}: "
+
             if actual == expected:
                 s += "correct!"
             else:
-                s += f"\n\tReceived: \n{actual}\n\tExpected: \n{expected}"
+                s += f"\n\tReceived: \n\t\t{actual}\n\tExpected: \n\t\t{expected}"
 
         s += "\n" + "=" * 80
         print(s)
@@ -76,9 +77,26 @@ def add_test(args=list(), solutions=list()):
 # ---------------------------------------------------------------------- #
 # Test Functions
 
-@add_test([5], [6])
-def job_infer_test_1(x):
-    return np.zeros((3, 3))
+@add_test(solutions=[[(5, 2), (3, 3), (3, 3)]])
+def job_infer_test_1():
+    output_job = pt.core.job.Jobbb()
+
+    subjob1 = output_job[0]
+    subjob2 = output_job[5]
+    subjob3 = output_job[2]
+
+    subjob1[:] = np.ones((5, 2))
+
+    for i in range(3):
+        subjob2[i][:] = [0, 0, 0]
+
+    for i in range(3):
+        for j in range(3):
+            subjob3[i][j] = 0
+
+    job_spec, input_job = output_job.infer()
+
+    return [tuple(js.shape) for js in job_spec]
 
 
 # ---------------------------------------------------------------------- #

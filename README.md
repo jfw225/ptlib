@@ -9,6 +9,12 @@ This library that aims to decrease the latency of shared-memory-based communicat
 - implement option to directly specify job spec
 - infer job by passing a list into `output_job`, have job map assign 
 indices like before, and then iterate over jobs and infer shape
+- write job to be a dict. overload set item and make sure assignment fills
+- save key of job in job spec
+- pass in output and input job buffers when job map is created
+- refer to embedded jobs as subjobs? 
+- overload getitem for jobinfer such that the first assignment allows for 
+  something immutable
 
 - create requirements file 
 - way to implement task order non linear pipelines
