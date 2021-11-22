@@ -1,7 +1,7 @@
 from typing import Iterable
 import numpy as np
 
-from ptlib.core.job import JobSpec, Job
+from ptlib.core.job import JobSpec, Job, Job
 from ptlib.errors import WorkerCreationError, WorkerStartError
 from ptlib.core.queue import Queue
 from ptlib.core.worker import Worker
@@ -47,32 +47,39 @@ class Task:
         self.input_q = Queue()
 
     @property
+    def ttype(self):
+        """
+        The task type. 
+        """
+
+        return self.__class__
+
+    @property
     def name(self):
         """
         Formats the name of the task instance by looking at the class
         definition.
         """
 
-        return self.__class__.__name__
+        return self.ttype.__name__
 
     # ---------------------------------------------------------------------- #
     # Methods that can be Overloaded by Developer
 
-    def create_map(self, worker: Worker):
+    def create_map(self, worker: Worker, input_job, output_job):
         """
         Returns a function that maps input job to output job for a specific
         worker.
 
         The returned function `map_job` should evaluate an expression
         to determine the value of `worker.EXIT_FLAG`. It should also do
-        something with each job in `input_job: ptlib.core.job.Job` and return
-        an output job.
+        something with each sub job in `input_job: ptlib.core.job.Job` update
+        each subjob in `output_job: ptlic.core.job.Job`.
 
         The default `create_map` should be overloaded.
         """
 
-        def map_job(input_job: Job["Job_1_in", ..., "Job_n_in"]
-                    ) -> (Job or np.ndarray)["Job_1_out", ..., "Job_m_out"]:
+        def map_job():
             # example exit
             if input_job is Task.Exit:
                 worker.EXIT_FLAG = True
@@ -110,7 +117,7 @@ class Task:
         from copy import copy
         for worker_id in range(self.num_workers):
             self.workers.append(
-                Worker(self.__class__, self.num_workers, self.id, worker_id, input_q, output_q, meta_q))
+                Worker(self.ttype, self.num_workers, self.id, worker_id, input_q, output_q, meta_q))
 
     def get_total_jobs(self):
         """
@@ -141,11 +148,12 @@ class Task:
 
         input_job = self.get_example_job() or input_job
 
-        worker = Worker(self.__class__, 0, 0, 0, Queue(), Queue(), Queue())
-        output_job = self.create_map(worker)(input_job)
-        job_specs = JobSpec.from_output_job(output_job)
+        worker = Worker(self.ttype, 0, 0, 0, Queue(), Queue(), Queue())
+        output_job = Job()
+        self.create_map(worker, input_job, output_job)()
+        job_spec, ouput_job = output_job.infer()
 
-        return output_job, job_specs
+        return job_spec, output_job
 
     def iter_tasks(self):
         """

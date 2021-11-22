@@ -42,8 +42,8 @@ class MetadataManager:
         """
 
     # job specification for metadata (task id, worker id, if data is start/finish time)
-    metadata_spec = JobSpec(example=ptconfig._METADATA.JOB_SPEC_EXAMPLES[0]) + \
-        JobSpec(example=ptconfig._METADATA.JOB_SPEC_EXAMPLES[1])
+    metadata_spec = JobSpec(name="id", example=ptconfig._METADATA.JOB_SPEC_EXAMPLES[0]) + \
+        JobSpec(name="data", example=ptconfig._METADATA.JOB_SPEC_EXAMPLES[1])
 
     # the queue max size
     meta_q_cap = ptconfig._METADATA.QUEUE_MAX_SIZE
@@ -73,7 +73,9 @@ class MetadataManager:
                             capacity=self.meta_q_cap)
 
         # link metadata queue and get local buffer
-        self._meta_buffer = self.meta_q._link_mem(create_local=True)
+        meta_buffer = self.meta_q._link_mem()
+        self._id_buffer = meta_buffer["id"]
+        self._data_buffer = meta_buffer["data"]
 
     def update(self):
         """
@@ -82,7 +84,8 @@ class MetadataManager:
 
         while self.meta_q.get() is not BaseQueue.Empty:
             # get the index and new metadata
-            (*index, sf_ind), new_meta = map(tuple, self._meta_buffer)
+            *index, sf_ind = self._id_buffer
+            new_meta = tuple(self._data_buffer)
 
             # if the S/F indicator is HIGH, set the first index
             if sf_ind == 1:

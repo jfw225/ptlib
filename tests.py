@@ -2,6 +2,8 @@ import ptlib as pt
 
 import numpy as np
 
+from ptlib.core.job import JobSpec
+
 
 class TestCase:
     def __init__(self, fn, args, solutions):
@@ -79,7 +81,7 @@ def add_test(args=list(), solutions=list()):
 
 @add_test(solutions=[[(5, 2), (3, 3), (3, 3)]])
 def job_infer_test_1():
-    output_job = pt.core.job.Jobbb()
+    output_job = pt.core.job.Job()
 
     subjob1 = output_job[0]
     subjob2 = output_job[5]
@@ -98,6 +100,30 @@ def job_infer_test_1():
 
     return [tuple(js.shape) for js in job_spec]
 
+
+@add_test(solutions=[[(150, 1080, 1920, 3), (0, )]])
+def job_infer_test_2():
+    from test_tasks import VideoIngest, VideoWrite
+    input_job = pt.core.job.Job()
+
+    task1 = VideoIngest(1)
+    job_spec1, output_job1 = task1.infer_structure(input_job)
+
+    task2 = VideoWrite(1)
+    job_spec2, output_job2 = task2.infer_structure(output_job1)
+
+    return [tuple(js.shape) for js in job_spec1 + job_spec2]
+
+
+@add_test(solutions=[a := 3 * 9, b := np.nbytes[np.float32] * 2 * 5 * 3, a + b])
+def job_spec_get_nbytes_test_1():
+    job_spec1 = JobSpec(example=np.ones((3, 9), dtype=np.int8))
+    a1 = job_spec1.get_nbytes()
+
+    job_spec2 = JobSpec(example=np.zeros((2, 5, 3), dtype=np.float32))
+    job_spec3 = job_spec1 + job_spec2
+
+    return a1, job_spec2.get_nbytes(), job_spec3.get_nbytes()
 
 # ---------------------------------------------------------------------- #
 

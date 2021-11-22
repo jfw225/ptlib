@@ -34,28 +34,28 @@ class Worker(Process):
         task = Task(num_workers=self.num_workers, task_id=self.task_id)
 
         # link queues to memory
-        input_job = input_q._link_mem(create_local=True)
-        output_job_buf = output_q._link_mem(create_local=True)
-        meta_buffer = meta_q._link_mem(create_local=True)
+        input_job = input_q._link_mem()
+        output_job = output_q._link_mem()
+        meta_buffer = meta_q._link_mem()
+
+        # set up local metadata buffers
+        id_buffer = meta_buffer["id"]
+        data_buffer = meta_buffer["data"]
 
         # set the first job in buffer to (task id, worker id, and S/F indicator to HIGH)
-        meta_buffer[0][:] = [task.id, self.id, 1][:]
-
-        # metadata time buffer
-        time_array = meta_buffer[1]
+        id_buffer[:] = [task.id, self.id, 1][:]
 
         # give main thread worker start time
         start_time = time_ns()
-        time_array[:] = [start_time, start_time][:]
+        data_buffer[:] = [start_time, start_time][:]
         # (if metadata seems off, add while loop)
-        assert meta_q.put(
-            meta_buffer) is not BaseQueue.Full, "meta q should always put (prejob)"
+        assert meta_q.put() is not BaseQueue.Full, "meta q should always put (prejob)"
 
         # set S/F indicator to LOW
-        meta_buffer[0][-1] = 0
+        id_buffer[-1] = 0
 
         # create job mapping
-        job_map = task.create_map(self)
+        job_map = task.create_map(self, input_job, output_job)
 
         input_status = BaseQueue.Empty
 
@@ -68,25 +68,25 @@ class Worker(Process):
             # print(f"Task: {task.id} | Get Time: {time_ns() - t}")
 
             # record start time
-            time_array[0] = time_ns()
+            data_buffer[0] = time_ns()
 
-            # map compute output job
-            output_job = job_map(input_job)
+            # map input job to compute output job
+            job_map()
 
-            print(output_job_buf)
-            for i in range(len(output_job)):
-                print(output_job_buf[i].shape, output_job[i].shape)
-                output_job_buf[i][:] = output_job[i]
+            # print(output_job_buf)
+            # if output_job[0] is not None:
+            #     for i in range(len(output_job)):
+            #         print(output_job_buf[i].shape, output_job[i].shape)
+            #         output_job_buf[i][:] = output_job[i]
 
             # record finish time
-            time_array[1] = time_ns()
+            data_buffer[1] = time_ns()
 
             # put metadata into queue (if metadata seems off, add while loop)
-            assert meta_q.put(
-                meta_buffer) is not BaseQueue.Full, "meta q should always put"
+            assert meta_q.put() is not BaseQueue.Full, "meta q should always put"
 
             t = time_ns()
-            while output_q.put(output_job) is BaseQueue.Full:
+            while output_q.put() is BaseQueue.Full:
                 pass
             # print(f"Task: {task.id} | Put Time: {(time_ns() - t)/1e9}")
 
@@ -97,10 +97,10 @@ class Worker(Process):
         finish_time = time_ns()
 
         # set S/F indicator to HIGH
-        meta_buffer[0][-1] = 1
+        id_buffer[-1] = 1
 
         # give main thread worker finish time
-        time_array[:] = [start_time, finish_time][:]
-        meta_q.put(meta_buffer)  # (if metadata seems off, add while loop)
+        data_buffer[:] = [start_time, finish_time][:]
+        meta_q.put()  # (if metadata seems off, add while loop)
 
         print(f"Worker Done -- Task: {task.name} | ID: {self.id}")

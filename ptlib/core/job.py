@@ -1,10 +1,12 @@
 from multiprocessing.shared_memory import SharedMemory
 import numpy as np
 
-from typing import Hashable, Iterable, Tuple
+from typing import Hashable, Iterable, Tuple, Any
+
+from numpy.lib.arraysetops import isin
 
 
-class JobSpec(list):
+class JobSpec:
     """ Job specification. *** COME BACK *** """
 
     def __init__(self,
@@ -26,11 +28,13 @@ class JobSpec(list):
                 the data (if provided, shape and dtype will be ignored)
         """
 
-        super().__init__([self])
+        self.next = None
 
         # if no shape nor example is given, assumed to be an empty spec
         self._is_empty = shape is None and example is None
         if self._is_empty:
+            self.shape = (0,)
+            self.dtype = None
             return
 
         self.name = name
@@ -57,89 +61,74 @@ class JobSpec(list):
 
         return job_specs
 
-    def __add__(self, x: "JobSpec") -> "JobSpec":
+    def get_nbytes(self, capacity: int = 1):
         """
-        List is inherited to allow for JobSpec objects to be combined using the
-        addition operator `+`.
+        Calculates the number of bytes required to allocate a `ptlib.Job` 
+        specified by `self` in a `ptlib.Queue` of size `capacity`. 
         """
+
+        return capacity * sum([js.nbytes for js in self])
+
+    def __iter__(self):
+        js = self
+        while js is not None:
+            yield js
+            js = js.next
+
+    def __add__(self, other_js: "JobSpec") -> "JobSpec":
+        """
+        LinkedList implementation allows for JobSpec objects to be combined 
+        using the addition operator `+`.
+        """
+
+        if not isinstance(other_js, JobSpec):
+            return self
 
         if self._is_empty:
-            return x
+            return other_js
 
-        return super().__add__(x)
+        js = self
+        while js.next is not None:
+            js = js.next
+
+        js.next = other_js
+
+        return self
 
     def __repr__(self):
         return "[" + str(self) + "]"
 
     def __str__(self):
-        return f"Shape: {self.shape}, DType: {self.dtype}"
+        s = " | ".join(
+            [f"Name: {js.name}, Shape: {js.shape}, DType: {js.dtype}" for js in self])
+
+        return "[" + s + "]"
 
 
-class Job(np.ndarray):
-    """ Job wrapper. *** COME BACK *** """
-
-    def __new__(cls,
-                job_specs: JobSpec,
-                buffers: Iterable[SharedMemory] = None):
-
-        # create empty array
-        job = np.ndarray(len(job_specs), dtype=object)
-
-        # fill array
-        for i, job_spec in enumerate(job_specs):
-            buf = buffers[i].buf if buffers is not None else None
-            job[i] = np.ndarray(shape=job_spec.shape,
-                                dtype=job_spec.dtype,
-                                buffer=buf)
-
-        return job.view(cls)
-
-
-class Jobb(np.ndarray):
-    """
-    calculate the total buffer size
-    allocate buffer in memory
-    link individual arrays using offset and shape
-
-    start with get:
-        create a data array size of buffer
-        on get, load buffer data into array
-        give smaller arrays as the input jobs"""
-
-    def __new__(cls, job_specs: JobSpec):
-        """
-        Returns job array with buffer. (*** FIX)
-        """
-
-        # calculate size of buffer
-        nbytes = sum([job_spec.nbytes for job_spec in job_specs])
-
-        # create buffer array (int8 to secure `nbytes`)
-        buffer = np.empty(nbytes, dtype=np.int8)
-
-        # create job array
-        job = np.ndarray(len(job_specs), dtype=object)
-
-        # fill job array
-        job_offset = 0
-        for i, job_spec in enumerate(job_specs):
-            job[i] = np.ndarray(shape=job_spec.shape,
-                                dtype=job_spec.dtype,
-                                buffer=buffer,
-                                offset=job_offset)
-            job_offset += job_spec.nbytes
-
-        return job.view(cls), buffer
-
-
-class Jobbb(dict):
+class Job(dict):
     """ object used for inferring job structures """
 
-    def __init__(self):
+    def __init__(self, job_spec: JobSpec = None):
         super().__init__()
 
-        # if dictionary is set-sliced with object v, v is stored in this
-        self._subjob = None
+        # if no job spec is passed, then this instance is used for inferance
+        if job_spec is None:
+            # if dictionary is set-sliced with object v, v is stored in this
+            self._subjob = None
+            return
+
+        # create local buffer for entire job
+        self._buffer = np.ndarray(job_spec.get_nbytes(), dtype=np.int8)
+
+        # create subjobs
+        offset = 0
+        for js in job_spec:
+            self[js.name] = np.ndarray(shape=js.shape,
+                                       dtype=js.dtype,
+                                       buffer=self._buffer,
+                                       offset=offset)
+
+            offset += js.nbytes
 
     def infer(self):
         """
@@ -150,7 +139,7 @@ class Jobbb(dict):
 
         job_spec = JobSpec()
         for key, subjob in self.items():
-            if isinstance(subjob, Jobbb):
+            if isinstance(subjob, Job):
                 subjob = self[key] = subjob.collapse()
 
             job_spec = job_spec + JobSpec(name=key, example=subjob)
@@ -168,7 +157,7 @@ class Jobbb(dict):
 
         subjobs = list()
         for subjob in self.values():
-            if isinstance(subjob, Jobbb):
+            if isinstance(subjob, Job):
                 subjob = subjob.collapse()
 
             subjobs.append(subjob)
@@ -176,19 +165,43 @@ class Jobbb(dict):
         return np.array(subjobs)
 
     def __getitem__(self, k):
-        print(k)
+        # print(k)
         if k not in self:
-            self[k] = Jobbb()
+            self[k] = Job()
 
         return super().__getitem__(k)
 
     def __setitem__(self, k, v) -> None:
-        print(k, v)
+        # print(k, v)
         # if `k` is a slice, then
         if not isinstance(k, slice):
             return super().__setitem__(k, v)
 
         self._subjob = v
+
+    def __getattribute__(self, __name: str):
+        """
+        Overloaded to ensure that inferencing of job structure is not stopped 
+        due to a method call that does not pertain to the structure. For 
+        example, if `subjob1.fill(0)` is called (where `fill` is a method of a 
+        `numpy.ndarray`), we want to continue to infer the structure of the 
+        subjob without throwing an error. 
+        """
+
+        try:
+            return super().__getattribute__(__name)
+        except AttributeError:
+            return Job()
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        """
+        Overloaded to protect runtime interruption during structure inference. 
+        """
+
+        try:
+            return super().__call__(*args, **kwds)
+        except TypeError and AttributeError:
+            return None
 
 
 def temp(input_job, output_job):
