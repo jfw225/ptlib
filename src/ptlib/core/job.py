@@ -1,10 +1,6 @@
-from multiprocessing.shared_memory import SharedMemory
 import numpy as np
 
-from typing import Hashable, Iterable, Tuple, Any
-
-from numpy.lib.arraysetops import isin
-
+from typing import Hashable, Tuple, Any
 
 class JobSpec:
     """ Job specification. *** COME BACK *** """

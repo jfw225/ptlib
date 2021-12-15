@@ -103,7 +103,7 @@ def job_infer_test_1():
 
 @add_test(solutions=[[(150, 1080, 1920, 3), (0, )]])
 def job_infer_test_2():
-    from test_tasks import VideoIngest, VideoWrite
+    from tests.test_tasks import VideoIngest, VideoWrite
     input_job = pt.core.job.Job()
 
     task1 = VideoIngest(1)

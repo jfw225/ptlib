@@ -1,12 +1,6 @@
-from typing import NoReturn
-import numpy as np
-
-from multiprocessing.managers import BaseManager
 from multiprocessing import Process
 from time import time_ns
 
-from ptlib.core._backend import SERVER_ADDRESS
-from ptlib.core.metadata import MetadataManager
 from ptlib.core.queue import BaseQueue
 
 

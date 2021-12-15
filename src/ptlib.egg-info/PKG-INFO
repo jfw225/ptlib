@@ -1,0 +1,59 @@
+Metadata-Version: 2.1
+Name: ptlib
+Version: 0.0.5
+Summary: This library aims to provide efficient implementation and detaile debugging of solutions to problems in the asynchronous domain.
+Home-page: https://github.com/jfw225/ptlib
+Author: Joseph Whelan
+Author-email: 
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/jfw225/ptlib/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# Parallel Timing Library
+This library that aims to decrease the latency of shared-memory-based communication between asynchronous processes in Python. The common practice for sharing data between parallel processes is using a Python standard library multiprocessing Queue-like data structure. However, this requires that the data be serialized and transferred over a local socket, leading to a significant bottleneck when dealing with large data structures. I have been able to decrease this latency by leveraging the multiprocessing SharedMemory class added to the standard library with the release of Python 3.8. This addition allows the user to allocate bytes in memory and directly read/write to a buffer without serializing data. As it currently stands, implementing this requires an intimidating amount of familiarity with multiprocessing. I aim to abstract most of the heavy lifting in this library with the hope of increasing the readability and efficiency of asynchronous pipelines.
+
+* tests show that ptlib.Queue can be more than 50 times faster than multiprocessing.Queue.
+
+
+### TODO
+
+- implement option to directly specify job spec
+- infer job by passing a list into `output_job`, have job map assign 
+indices like before, and then iterate over jobs and infer shape
+- write job to be a dict. overload set item and make sure assignment fills
+- save key of job in job spec
+- pass in output and input job buffers when job map is created
+- refer to embedded jobs as subjobs? 
+- overload getitem for jobinfer such that the first assignment allows for 
+  something immutable
+
+- create requirements file 
+- way to implement task order non linear pipelines
+- document the code lol
+- get rid of unused imports
+
+- remove duplicated code from controller `_set_up_tasks`
+
+- fix task job map documentation
+- create way to specify spec in typing. for ex, job: Job[JobSpec]
+- create several objects in _typing
+
+
+
+- *** instead of creating controller, decorate tasks
+- *** CHANGE queue to hold selection index until job is done so we dont have to copy data from buffer
+- *** have put copy directly to output buffer (this may mean locking down output buffer before task starts)
+- *** try to figure out optimal worker numbers under constraints
+- *** instead of having several buffers for several I/O, have one buffer and 
+keep track of the offset and number of bytes
+- *** add way to enable/disable metadata
+
+
+
+

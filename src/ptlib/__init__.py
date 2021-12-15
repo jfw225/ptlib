@@ -1,14 +1,4 @@
 
-from ptlib import errors
-
-from ptlib.core.api import (
-    JobSpec, Job,
-    Queue,
-    EmptyTask, Task,
-    Worker,
-    Controller
-)  # move to bottom
-
 __docformat__ = "restructuredtext"
 
 # Let users know if they're missing any of our hard dependencies
@@ -29,3 +19,12 @@ if missing_dependencies:
 del hard_dependencies, dependency, missing_dependencies
 
 ##### MAIN API #####
+from ptlib import errors
+
+from ptlib.core.api import (
+    JobSpec, Job,
+    Queue,
+    EmptyTask, Task,
+    Worker,
+    Controller
+)  # move to bottom

@@ -4,8 +4,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="ptlib-jfw225",
-    version="0.0.1",
+    name="ptlib",
+    version="0.0.5",
     author="Joseph Whelan",
     author_email="",
     description="This library aims to provide efficient implementation and detaile debugging of solutions to problems in the asynchronous domain.",
@@ -23,7 +23,8 @@ setuptools.setup(
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
     install_requires=[
-        "numpy>=4.5.2"
+        "numpy>=1.19.5",
+        "matplotlib>=3.4.3"
     ],
     python_requires=">=3.8",
 )

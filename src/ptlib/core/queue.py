@@ -1,11 +1,7 @@
 
-from typing_extensions import runtime
 import numpy as np
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import Lock
-
-from typing import Tuple
-from time import time_ns
 
 from ptlib.core.job import JobSpec, Job
 

@@ -1,7 +1,7 @@
 from typing import Iterable
 import numpy as np
 
-from ptlib.core.job import JobSpec, Job, Job
+from ptlib.core.job import Job, Job
 from ptlib.errors import WorkerCreationError, WorkerStartError
 from ptlib.core.queue import Queue
 from ptlib.core.worker import Worker
