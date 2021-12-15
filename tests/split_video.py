@@ -1,13 +1,14 @@
 import os
-import cv2
-import numpy as np
-import multiprocessing as mp
-
+os.chdir("..")
+print(os.getcwd())
 import ptlib as pt
+import multiprocessing as mp
+import numpy as np
+import cv2
 
 
 if __name__ == '__main__':
-    from test_tasks import VideoIngest, VideoWrite
+    from tests.test_tasks import VideoIngest, VideoWrite
 
     # create pipeline
     pipeline = VideoIngest(num_workers=2) >> VideoWrite(num_workers=2)

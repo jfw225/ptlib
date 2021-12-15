@@ -106,7 +106,10 @@ class JobSpec:
 
 
 class Job(dict):
-    """ object used for inferring job structures """
+    """ 
+    The Job object. Can be used to infer structure of jobs and as a job 
+    itself.
+    """
 
     def __init__(self, job_spec: JobSpec = None):
         super().__init__()
@@ -202,9 +205,3 @@ class Job(dict):
             return super().__call__(*args, **kwds)
         except TypeError and AttributeError:
             return None
-
-
-def temp(input_job, output_job):
-    j1 = input_job[0]
-
-    output_job[0] = 1
