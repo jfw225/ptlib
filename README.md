@@ -4,37 +4,4 @@ This library that aims to decrease the latency of shared-memory-based communicat
 * tests show that ptlib.Queue can be more than 50 times faster than multiprocessing.Queue.
 
 
-### TODO
-
-- implement option to directly specify job spec
-- infer job by passing a list into `output_job`, have job map assign 
-indices like before, and then iterate over jobs and infer shape
-- write job to be a dict. overload set item and make sure assignment fills
-- save key of job in job spec
-- pass in output and input job buffers when job map is created
-- refer to embedded jobs as subjobs? 
-- overload getitem for jobinfer such that the first assignment allows for 
-  something immutable
-
-- create requirements file 
-- way to implement task order non linear pipelines
-- document the code lol
-- get rid of unused imports
-
-- remove duplicated code from controller `_set_up_tasks`
-
-- fix task job map documentation
-- create way to specify spec in typing. for ex, job: Job[JobSpec]
-- create several objects in _typing
-
-
-
-- *** instead of creating controller, decorate tasks
-- *** CHANGE queue to hold selection index until job is done so we dont have to copy data from buffer
-- *** have put copy directly to output buffer (this may mean locking down output buffer before task starts)
-- *** try to figure out optimal worker numbers under constraints
-- *** instead of having several buffers for several I/O, have one buffer and 
-keep track of the offset and number of bytes
-- *** add way to enable/disable metadata
-
 
